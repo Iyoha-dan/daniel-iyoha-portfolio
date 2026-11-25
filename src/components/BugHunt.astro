@@ -1,0 +1,566 @@
+---
+// "Bug hunt": a fake checkout with five planted bugs and 60 seconds to find them. Every part of
+// the checkout is clickable (and reachable by keyboard), so tapping things that are fine counts
+// as a miss, like real testing. The total bug is one Daniel logged for real on Linkhut (MKT-002).
+// When a game ends it fires "bughunt:over", which brings up the site feedback card.
+import Feedback from './Feedback.astro';
+
+type Spot = { id: string; bug?: { title: string; why: string } };
+const bugs: Record<string, Spot['bug']> = {
+  delivery: { title: 'Delivery fee in dollars', why: 'A naira checkout charging delivery as $1,500.' },
+  total: {
+    title: 'Total ignores the quantity',
+    why: '3 × ₦12,500 + ₦1,500 delivery is ₦39,000, not ₦12,500. I logged this exact bug on Linkhut.',
+  },
+  phone: { title: 'Phone field accepts letters', why: '"08031ab4567" is not a phone number; the field should only take digits.' },
+  pay: { title: 'Typo on the main button', why: '"Procced" on the one button every customer reads.' },
+  coupon: { title: 'Coupon button sticks out of the card', why: 'A layout bug: it overflows the right edge.' },
+};
+const bugCount = Object.keys(bugs).length;
+---
+
+<section id="bug-hunt" class="hunt wrap section-rule" aria-labelledby="hunt-title" data-hunt>
+  <div class="hunt-intro">
+    <h2 id="hunt-title">Bug hunt</h2>
+    <p class="hunt-lede">
+      This checkout has {bugCount} bugs. You have 60 seconds. Tap anything that looks wrong; tapping things that are fine counts as
+      a miss.
+    </p>
+
+    <div class="scoreboard" aria-live="polite">
+      <p class="score"><span data-found>0</span>/{bugCount} <span class="score-label">found</span></p>
+      <p class="clock"><span data-time>60</span>s</p>
+      <p class="misses"><span data-misses>0</span> <span class="score-label">misses</span></p>
+    </div>
+    <p class="hunt-status" data-status>Tap anything in the checkout to start the clock.</p>
+    <p class="best" data-best hidden></p>
+  </div>
+
+  <div class="hunt-results">
+    <ol class="found-list" data-found-list></ol>
+
+    <div class="hunt-end" data-end hidden>
+      <p class="end-line" data-end-line></p>
+      <div class="end-actions">
+        <button type="button" class="btn btn-solid" data-again>Play again</button>
+        <a class="visit" href="/work/linkhut">See bugs I found for real <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+
+    <Feedback />
+  </div>
+
+  <div class="device" aria-label="A checkout page to test" role="group">
+    <div class="shop" data-board>
+      <div class="shop-bar">
+        <button type="button" class="spot" data-spot="brand"><span class="shop-brand">Kapa Store</span></button>
+        <button type="button" class="spot" data-spot="secure"><span class="secure">Secure checkout</span></button>
+      </div>
+
+      <div class="item">
+        <button type="button" class="spot item-image" data-spot="image"><span class="tote" aria-hidden="true"></span><span class="sr-only">Product photo</span></button>
+        <div class="item-text">
+          <button type="button" class="spot" data-spot="title"><span class="item-title">Ankara tote bag</span></button>
+          <button type="button" class="spot" data-spot="price"><span class="item-price">₦12,500 each</span></button>
+          <button type="button" class="spot" data-spot="qty"><span class="qty">Qty <b>3</b></span></button>
+        </div>
+      </div>
+
+      <dl class="sums">
+        <div>
+          <dt>Subtotal</dt>
+          <dd><button type="button" class="spot" data-spot="subtotal">₦37,500</button></dd>
+        </div>
+        <div>
+          <dt>Delivery</dt>
+          <dd><button type="button" class="spot" data-spot="delivery">$1,500</button></dd>
+        </div>
+        <div class="sum-total">
+          <dt>Total</dt>
+          <dd><button type="button" class="spot" data-spot="total">₦12,500</button></dd>
+        </div>
+      </dl>
+
+      <div class="field">
+        <span class="field-label">Phone number</span>
+        <button type="button" class="spot field-box" data-spot="phone">08031ab4567</button>
+      </div>
+
+      <div class="coupon-row">
+        <span class="field-label">Have a coupon?</span>
+        <button type="button" class="spot coupon" data-spot="coupon">Apply coupon</button>
+      </div>
+
+      <button type="button" class="spot pay" data-spot="pay">Procced to payment</button>
+    </div>
+  </div>
+</section>
+
+<script define:vars={{ bugs }}>
+  // Plain script: the game is small and needs no library.
+  const root = document.querySelector('[data-hunt]');
+  if (root) {
+    const total = Object.keys(bugs).length;
+    const $ = (sel) => root.querySelector(sel);
+    const spots = [...root.querySelectorAll('[data-spot]')];
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    let state = 'ready'; // ready → playing → over
+    let found = new Set();
+    let misses = 0;
+    let timeLeft = 60;
+    let timer;
+
+    const loadBest = () => {
+      try {
+        return JSON.parse(localStorage.getItem('bug-hunt-best') || 'null');
+      } catch {
+        return null;
+      }
+    };
+    const showBest = () => {
+      const best = loadBest();
+      const el = $('[data-best]');
+      if (!best) return;
+      el.hidden = false;
+      el.textContent = `Your best: ${best.found}/${total} in ${best.time}s`;
+    };
+
+    const render = () => {
+      $('[data-found]').textContent = found.size;
+      $('[data-time]').textContent = timeLeft;
+      $('[data-misses]').textContent = misses;
+    };
+
+    const start = () => {
+      state = 'playing';
+      root.classList.add('is-playing');
+      $('[data-status]').textContent = 'Clock is running. Find them all.';
+      timer = setInterval(() => {
+        timeLeft -= 1;
+        render();
+        if (timeLeft <= 0) finish();
+      }, 1000);
+    };
+
+    const addFound = (id) => {
+      const bug = bugs[id];
+      const li = document.createElement('li');
+      li.className = 'is-found';
+      li.innerHTML = '<strong></strong><span></span>';
+      li.querySelector('strong').textContent = bug.title;
+      li.querySelector('span').textContent = bug.why;
+      $('[data-found-list]').append(li);
+    };
+
+    const finish = () => {
+      clearInterval(timer);
+      state = 'over';
+      root.classList.remove('is-playing');
+      root.classList.add('is-over');
+      const time = 60 - timeLeft;
+      // Show what was missed, so every game ends with all five explained.
+      for (const id of Object.keys(bugs)) {
+        if (found.has(id)) continue;
+        root.querySelector(`[data-spot="${id}"]`).classList.add('is-missed');
+        const li = document.createElement('li');
+        li.className = 'is-missed';
+        li.innerHTML = '<strong></strong><span></span>';
+        li.querySelector('strong').textContent = `Missed: ${bugs[id].title}`;
+        li.querySelector('span').textContent = bugs[id].why;
+        $('[data-found-list]').append(li);
+      }
+      const line =
+        found.size === total
+          ? `All ${total} in ${time}s${misses ? ` with ${misses} ${misses === 1 ? 'miss' : 'misses'}` : ', no misses'}. You'd make a good tester.`
+          : `You found ${found.size} of ${total}${timeLeft <= 0 ? ' before the clock ran out' : ''}. Finding the rest is my job.`;
+      $('[data-end-line]').textContent = line;
+      $('[data-status]').textContent = found.size === total ? 'Every bug found.' : "Time's up.";
+      $('[data-end]').hidden = false;
+      const best = loadBest();
+      if (!best || found.size > best.found || (found.size === best.found && time < best.time)) {
+        try {
+          localStorage.setItem('bug-hunt-best', JSON.stringify({ found: found.size, time }));
+        } catch {}
+      }
+      showBest();
+      root.dispatchEvent(new CustomEvent('bughunt:over', { bubbles: true }));
+    };
+
+    const reset = () => {
+      clearInterval(timer);
+      state = 'ready';
+      found = new Set();
+      misses = 0;
+      timeLeft = 60;
+      root.classList.remove('is-playing', 'is-over');
+      spots.forEach((s) => s.classList.remove('is-found', 'is-missed', 'is-wrong'));
+      $('[data-found-list]').replaceChildren();
+      $('[data-end]').hidden = true;
+      $('[data-status]').textContent = 'Tap anything in the checkout to start the clock.';
+      render();
+    };
+
+    spots.forEach((spot) => {
+      spot.addEventListener('click', () => {
+        if (state === 'over') return;
+        if (state === 'ready') start();
+        const id = spot.dataset.spot;
+        if (bugs[id]) {
+          if (found.has(id)) return;
+          found.add(id);
+          spot.classList.add('is-found');
+          addFound(id);
+          $('[data-status]').textContent = `Bug found: ${bugs[id].title}. ${found.size} of ${total}.`;
+          render();
+          if (found.size === total) finish();
+        } else {
+          misses += 1;
+          $('[data-status]').textContent = 'That one works fine. Keep looking.';
+          spot.classList.remove('is-wrong');
+          if (!reduced.matches) void spot.offsetWidth;
+          spot.classList.add('is-wrong');
+          render();
+        }
+      });
+    });
+    $('[data-again]').addEventListener('click', () => {
+      reset();
+      spots[0].focus();
+    });
+    showBest();
+  }
+</script>
+
+<style>
+  .hunt {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+    grid-template-areas:
+      'intro device'
+      'results device';
+    grid-template-rows: auto 1fr;
+    gap: 0 clamp(32px, 5vw, 72px);
+    align-items: start;
+    padding-block: clamp(56px, 7vw, 96px);
+  }
+  .hunt h2 {
+    font-size: clamp(1.9rem, 1.3rem + 2.4vw, 3rem);
+    font-weight: 720;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  .hunt-lede {
+    margin-top: 12px;
+    max-width: 52ch;
+    font-size: clamp(1rem, 0.96rem + 0.25vw, 1.15rem);
+    color: var(--ink-2);
+  }
+
+  /* Scoreboard: reads like a test run */
+  .scoreboard {
+    display: flex;
+    gap: 10px;
+    margin-top: 28px;
+  }
+  .scoreboard p {
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--term);
+    color: var(--term-text);
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .score {
+    color: var(--term-pass) !important;
+  }
+  .score-label {
+    font-size: 0.75rem;
+    color: var(--term-dim);
+  }
+  .hunt-status {
+    margin-top: 14px;
+    min-height: 1.6em;
+    color: var(--ink-2);
+  }
+  .best {
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink-3);
+  }
+  .found-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 18px;
+    padding: 0;
+    list-style: none;
+  }
+  .found-list :global(li) {
+    display: grid;
+    gap: 2px;
+    padding: 12px 14px 12px 40px;
+    border-radius: 10px;
+    position: relative;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+  }
+  .found-list :global(li strong) {
+    color: var(--ink);
+  }
+  .found-list :global(li::before) {
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    font-family: var(--mono);
+    font-weight: 700;
+  }
+  .found-list :global(li.is-found) {
+    background: var(--pass-tint);
+  }
+  .found-list :global(li.is-found::before) {
+    content: '✓';
+    color: var(--pass);
+  }
+  .found-list :global(li.is-missed) {
+    background: var(--paper-2);
+  }
+  .found-list :global(li.is-missed::before) {
+    content: '✗';
+    color: #c2410c;
+  }
+  .hunt-end {
+    margin-top: 20px;
+  }
+  .end-line {
+    font-size: 1.15rem;
+    font-weight: 650;
+  }
+  .end-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 24px;
+    margin-top: 14px;
+  }
+  .end-actions .visit {
+    margin-top: 0;
+  }
+
+  /* The checkout under test: someone else's app, so its own look */
+  .hunt-intro {
+    grid-area: intro;
+  }
+  .hunt-results {
+    grid-area: results;
+  }
+  .device {
+    grid-area: device;
+    justify-self: center;
+    width: min(380px, 100%);
+    padding: 10px;
+    border-radius: 34px;
+    background: var(--term);
+    box-shadow: 0 30px 60px -30px rgb(20 20 18 / 0.5);
+  }
+  .shop {
+    display: grid;
+    gap: 16px;
+    padding: 20px 18px 22px;
+    border-radius: 26px;
+    background: #ffffff;
+    color: #1d1b2e;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 0.95rem;
+    overflow: visible;
+  }
+  .spot {
+    display: inline-block;
+    margin: 0;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    outline-offset: 2px;
+    transition:
+      background-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .spot:hover {
+      background: rgb(109 40 217 / 0.08);
+    }
+  }
+  .spot:focus-visible {
+    outline: 2px solid #6d28d9;
+  }
+  /* Outline only, so marked parts keep their own colours (the pay button stays readable). */
+  .spot.is-found {
+    box-shadow: 0 0 0 3px var(--pass);
+  }
+  .spot.is-missed {
+    box-shadow: 0 0 0 3px #c2410c;
+  }
+  .spot.is-wrong {
+    animation: nope 320ms ease;
+  }
+  @keyframes nope {
+    25% {
+      transform: translateX(-4px);
+    }
+    75% {
+      transform: translateX(4px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spot.is-wrong {
+      animation: none;
+    }
+  }
+
+  .shop-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .shop-brand {
+    font-weight: 800;
+    color: #6d28d9;
+  }
+  .secure {
+    font-size: 0.78rem;
+    color: #4b4864;
+  }
+  .item {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+  }
+  .item-image {
+    padding: 0;
+    width: 84px;
+    height: 84px;
+  }
+  .tote {
+    display: block;
+    width: 84px;
+    height: 84px;
+    border-radius: 14px;
+    background:
+      radial-gradient(circle at 30% 30%, #f59e0b 0 14%, transparent 15%),
+      radial-gradient(circle at 70% 60%, #16a34a 0 16%, transparent 17%),
+      radial-gradient(circle at 40% 80%, #dc2626 0 12%, transparent 13%),
+      #1e3a8a;
+  }
+  .item-text {
+    display: grid;
+    justify-items: start;
+    gap: 2px;
+  }
+  .item-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+  .item-price {
+    color: #4b4864;
+  }
+  .qty b {
+    padding: 2px 10px;
+    margin-left: 6px;
+    border-radius: 8px;
+    background: #f1eefb;
+  }
+  .sums {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 12px 0;
+    border-block: 1px solid #ece9f5;
+  }
+  .sums div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sums dt {
+    color: #4b4864;
+  }
+  .sums dd {
+    margin: 0;
+  }
+  .sum-total {
+    font-weight: 800;
+    font-size: 1.1rem;
+  }
+  .sum-total dt {
+    color: #1d1b2e;
+  }
+  .field {
+    display: grid;
+    gap: 6px;
+  }
+  .field-label {
+    font-size: 0.8rem;
+    color: #4b4864;
+  }
+  .field-box {
+    padding: 10px 12px;
+    border: 1px solid #d6d1ea;
+    border-radius: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .coupon-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  /* Bug: pushed past the card's right edge. */
+  .coupon {
+    margin-right: -34px;
+    padding: 8px 12px;
+    border: 1px solid #6d28d9;
+    border-radius: 999px;
+    color: #6d28d9;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pay {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    background: #6d28d9;
+    color: #ffffff;
+    font-weight: 700;
+    text-align: center;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .pay:hover {
+      background: #5b21b6;
+    }
+  }
+
+  /* Phones: rules and clock, then the checkout, then what you found. */
+  @media (max-width: 860px) {
+    .hunt {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        'intro'
+        'device'
+        'results';
+      gap: 20px;
+    }
+  }
+  @media (max-width: 420px) {
+    .coupon {
+      margin-right: -20px;
+    }
+  }
+</style>

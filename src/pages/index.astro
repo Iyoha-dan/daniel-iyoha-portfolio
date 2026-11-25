@@ -1,0 +1,934 @@
+---
+import Base from '../layouts/Base.astro';
+import Testimonials from '../components/Testimonials.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import WorkIndex from '../components/WorkIndex.astro';
+import BugHunt from '../components/BugHunt.astro';
+import { person, projects, testimonials, experience, skills, education } from '../data/profile';
+
+// Results of `npm test` (Playwright JSON reporter). The hero panel only appears once a run exists.
+type Spec = { title: string; ok: boolean; tests: { results: { duration: number }[] }[] };
+type Suite = { title: string; specs?: Spec[]; suites?: Suite[] };
+type Run = { suites: Suite[]; stats: { expected: number; unexpected: number; startTime: string } };
+const runs = import.meta.glob<{ default: Run }>('../data/test-run.json', { eager: true });
+const run = Object.values(runs)[0]?.default;
+const testLines: { name: string; ok: boolean }[] = [];
+const walk = (suite: Suite, path: string[]) => {
+  for (const spec of suite.specs ?? []) {
+    testLines.push({ name: [...path, spec.title].join(' › '), ok: spec.ok });
+  }
+  for (const child of suite.suites ?? []) walk(child, [...path, child.title]);
+};
+run?.suites.forEach((file) => walk(file, []));
+// One line per area of the site (the test's describe block) with a count, so the panel stays the
+// same height as tests are added. Failing tests are still listed by name under their area.
+const testGroups = [...Map.groupBy(testLines, (t) => (t.name.includes(' › ') ? t.name.split(' › ')[0] : 'general'))].map(
+  ([area, tests]) => ({ area, count: tests.length, failed: tests.filter((t) => !t.ok).map((t) => t.name.split(' › ').slice(1).join(' › ')) }),
+);
+const allPassed = run && run.stats.unexpected === 0;
+// "break them." in the headline is a toy: click it and the letters fall; "Run tests" puts them back
+// (src/scripts/break-headline.ts). Each word stays whole so the line still wraps between words.
+const breakAt = person.headline.lastIndexOf('break');
+const headStart = breakAt >= 0 ? person.headline.slice(0, breakAt) : person.headline;
+const breakWords = breakAt >= 0 ? person.headline.slice(breakAt).split(' ') : [];
+
+const runDate =
+  run && new Date(run.stats.startTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const external = { target: '_blank', rel: 'noopener noreferrer' };
+---
+
+<Base
+  title={`${person.name} · ${person.role}`}
+  description={`${person.name} is a QA tester and web developer in Lagos. ${person.intro}`}
+>
+  <SiteHeader home />
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <div class="status-row">
+          <p class="status"><span class="dot" aria-hidden="true"></span>{person.openTo}</p>
+          <p class="local-time">Lagos <span aria-hidden="true">·</span> <time data-lagos-time></time></p>
+        </div>
+        <script is:inline>
+          // Live time in Lagos, filled before first paint and kept to the minute.
+          (() => {
+            const el = document.querySelector('[data-lagos-time]');
+            const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' });
+            const tick = () => {
+              const now = new Date();
+              el.textContent = fmt.format(now);
+              el.dateTime = now.toISOString();
+              setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
+            };
+            tick();
+          })();
+        </script>
+        <p class="label hero-role">{person.role} · {person.location}</p>
+        <h1 id="hero-title">
+          {headStart}
+          {
+            breakWords.length > 0 && (
+              <button type="button" class="breakable" data-break aria-label={breakWords.join(' ')} aria-describedby="break-hint">
+                {breakWords.map((word, wi) => (
+                  <Fragment>
+                    <span class="word" aria-hidden="true" style={`--draw-delay:${600 + wi * 380}ms`}>
+                      {[...word].map((c) => (
+                        <span class="char">{c}</span>
+                      ))}
+                    </span>
+                    {wi < breakWords.length - 1 && ' '}
+                  </Fragment>
+                ))}
+              </button>
+            )
+          }
+        </h1>
+        <p class="hero-intro">{person.intro}</p>
+        <div class="hero-actions">
+          <a class="btn btn-solid" href="#work">See my work <span aria-hidden="true">↓</span></a>
+          {
+            person.cv ? (
+              <a class="btn btn-ghost" href={person.cv} download>
+                Download CV
+              </a>
+            ) : (
+              <a class="btn btn-ghost" href={`mailto:${person.email}`}>
+                Email me
+              </a>
+            )
+          }
+        </div>
+        {
+          breakWords.length > 0 && (
+            <Fragment>
+              <div class="rubble" data-rubble>
+                <button type="button" class="run-tests" data-run-tests hidden>
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7.5-4.5z" /></svg>
+                  Run tests
+                </button>
+              </div>
+              <p class="sr-only" id="break-hint">Breaks the headline. Run the tests to put it back.</p>
+              <p class="sr-only" aria-live="polite" data-break-status></p>
+            </Fragment>
+          )
+        }
+      </div>
+
+      {
+        // A run with no tests (a filtered or broken run) would show an empty panel, so skip it.
+        run && testLines.length > 0 && (
+          <figure class="term" aria-label="Playwright test results for this website">
+            <details id="test-run" open>
+            {/* Phones get this one-line result instead of the full list (see the script below). */}
+            <summary class="term-summary">
+              <span class="term-summary-text">
+                <span class="summary-result">
+                  <span class:list={['real-only', { 'term-pass': allPassed }]}>
+                    {allPassed ? `✓ ${run.stats.expected} tests passed` : `✗ ${run.stats.unexpected} tests failed`}
+                  </span>
+                  <span class="sim-only term-fail">✗ 1 test failed</span>
+                </span>
+                <span class="term-dim">Playwright · run {runDate}</span>
+              </span>
+              <span class="term-toggle" aria-hidden="true"></span>
+            </summary>
+            <div class="term-bar" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <p>daniel-iyoha-portfolio</p>
+            </div>
+            <div class="term-body">
+              <p class="term-cmd">
+                <span class="term-dim">$</span> npx playwright test
+              </p>
+              <p class="term-dim">
+                Running {testLines.length} tests using Chrome
+              </p>
+              <ul>
+                {testGroups.map((g, i) => (
+                  <li style={`--i:${i}`} class={g.failed.length ? 'fail' : 'ok'}>
+                    <span class="tick" aria-hidden="true">
+                      {g.failed.length ? '✗' : '✓'}
+                    </span>
+                    <span class="name">
+                      {g.area}{' '}
+                      <span class="term-dim">
+                        · {g.failed.length ? `${g.failed.length} of ${g.count} failed` : `${g.count} ${g.count === 1 ? 'test' : 'tests'}`}
+                      </span>
+                      {g.failed.map((name) => (
+                        <span class="failed-test">› {name}</span>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+                <li class="fail sim-only">
+                  <span class="tick" aria-hidden="true">✗</span>
+                  <span class="name">hero › headline is intact <span class="term-dim">· you broke it</span></span>
+                </li>
+              </ul>
+              <p class="term-total" style={`--i:${testGroups.length}`}>
+                <span class="real-only">
+                  {allPassed ? (
+                    <span class="term-pass">{run.stats.expected} passed</span>
+                  ) : (
+                    <span>{run.stats.unexpected} failed</span>
+                  )}
+                </span>
+                <span class="sim-only">
+                  <span class="term-fail">1 failed</span> <span class="term-dim">·</span>{' '}
+                  <span class="term-pass">{run.stats.expected} passed</span>
+                </span>{' '}
+                <span class="term-dim">· {runDate}</span>
+              </p>
+            </div>
+            </details>
+            <figcaption>This site's own Playwright suite. The panel is built from the latest real run.</figcaption>
+          </figure>
+        )
+      }
+      <script>
+        import '../scripts/break-headline';
+      </script>
+      <script is:inline>
+        // Collapse the test list on phones before first paint; without JS it simply stays open.
+        if (matchMedia('(max-width: 1100px)').matches) document.getElementById('test-run')?.removeAttribute('open');
+      </script>
+    </section>
+
+    <WorkIndex projects={projects} />
+
+    <Testimonials items={testimonials} />
+
+    <section id="experience" class="experience wrap section-rule" aria-labelledby="exp-title">
+      <div class="section-head" data-reveal>
+        <h2 id="exp-title">Experience</h2>
+        <p class="exp-role">{experience.headline}, {experience.company}</p>
+        <p class="exp-meta">
+          {experience.dates} · Full title: {experience.title}
+        </p>
+        <p class="exp-context">{experience.context}</p>
+      </div>
+      <div class="exp-groups">
+        {
+          experience.groups.slice(0, 2).map((g) => (
+            <div class="exp-group" data-reveal>
+              <h3 class="label">{g.label}</h3>
+              <ul>
+                {g.items.map((item) => (
+                  <li>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ))
+        }
+      </div>
+      <details class="exp-more" data-reveal>
+        <summary>Also at Wimika: {experience.groups.slice(2).map((g) => g.label.toLowerCase()).join(' and ')}</summary>
+        <div class="exp-groups">
+          {
+            experience.groups.slice(2).map((g) => (
+              <div class="exp-group">
+                <h3 class="label">{g.label}</h3>
+                <ul>
+                  {g.items.map((item) => (
+                    <li>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+        </div>
+      </details>
+    </section>
+
+    <section id="skills" class="skills wrap section-rule" aria-labelledby="skills-title">
+      <div class="section-head" data-reveal>
+        <h2 id="skills-title">Skills & training</h2>
+      </div>
+      <div class="skills-grid">
+        {
+          skills.map((s) => (
+            <div class="skill" data-reveal>
+              <h3 class="label">
+                {s.label}
+                {s.note && <span class="pill">{s.note}</span>}
+              </h3>
+              <p>{s.items.join(' · ')}</p>
+            </div>
+          ))
+        }
+      </div>
+      <aside class="now" data-reveal>
+        <p class="label">Currently</p>
+        <p>
+          Learning Playwright + TypeScript and converting my manual QA workflows into automated suites. The first public sample is
+          this website: its tests run against every build, and the panel at the top of the page shows the latest run.
+        </p>
+        <a class="visit" href={person.github} {...external}>Follow along on GitHub <span aria-hidden="true">↗</span></a>
+      </aside>
+
+      <ul class="edu" data-reveal>
+        {
+          education.map((e) => (
+            <li>
+              <div>
+                <h3>{e.title}</h3>
+                <p>{e.detail}</p>
+              </div>
+              <span class="label">{e.date}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <BugHunt />
+
+    <section id="contact" class="contact" aria-labelledby="contact-title">
+      <div class="wrap" data-reveal>
+        <h2 id="contact-title">Hiring a tester, or need a website that looks good and works well on every device?</h2>
+        <a class="contact-email" href={`mailto:${person.email}`}>{person.email}</a>
+        <p class="contact-alt">
+          Prefer to chat? <a href={person.whatsapp} {...external}>Message me on WhatsApp ↗</a>
+        </p>
+        <p class="contact-alt">
+          Need a website for your business? <a href="/websites">See how I work →</a>
+        </p>
+        <ul class="contact-links">
+          <li><a href={person.linkedin} {...external}>LinkedIn ↗</a></li>
+          <li><a href={person.github} {...external}>GitHub ↗</a></li>
+          <li><a href={person.x} {...external}>X ↗</a></li>
+          {person.cv && <li><a href={person.cv} download>Download CV ↓</a></li>}
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Base>
+
+<style>
+  /* Hero */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: clamp(32px, 5vw, 72px);
+    align-items: center;
+    padding-block: clamp(48px, 8vw, 112px) clamp(56px, 8vw, 104px);
+  }
+  .status-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+  }
+  .local-time {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px 6px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    font-size: 0.875rem;
+    color: var(--ink-2);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--pass);
+    box-shadow: 0 0 0 4px var(--pass-tint);
+  }
+  .hero-role {
+    margin-top: 28px;
+  }
+  h1 {
+    margin-top: 12px;
+    font-size: clamp(2.5rem, 1.5rem + 4.2vw, 4.75rem);
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  /* "break them." toy (src/scripts/break-headline.ts) */
+  .breakable {
+    display: inline;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: inherit;
+    cursor: pointer;
+  }
+  .breakable .word {
+    position: relative;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  /* Dashed green underline: the hint that this part of the headline does something.
+     After load its dashes appear left to right, one at a time, as if typed out. */
+  .breakable .word::after {
+    content: '';
+    position: absolute;
+    left: 0.04em;
+    right: 0.04em;
+    bottom: 0.02em;
+    border-bottom: 0.06em dashed var(--pass);
+    transition: opacity 200ms ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .breakable .word::after {
+      animation: type-in 640ms steps(12, end) var(--draw-delay, 600ms) both;
+    }
+  }
+  @keyframes type-in {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+  :global(:root[data-headline='broken']) .breakable .word::after {
+    opacity: 0;
+  }
+  :global(:root[data-headline='broken']) .breakable {
+    cursor: default;
+  }
+  .breakable .char {
+    display: inline-block;
+    will-change: transform;
+  }
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    :global(:root:not([data-headline='broken'])) .breakable:hover .char {
+      animation: loosen 320ms var(--ease-out);
+    }
+    .breakable:hover .char:nth-child(even) {
+      animation-delay: 40ms;
+    }
+  }
+  @keyframes loosen {
+    30% {
+      transform: translateY(-0.04em) rotate(-4deg);
+    }
+    65% {
+      transform: translateY(0.02em) rotate(3deg);
+    }
+  }
+  /* The strip the letters land in; it opens under the buttons while the headline is broken. */
+  .rubble {
+    position: relative;
+    display: grid;
+    grid-template-rows: 0px;
+    transition: grid-template-rows 400ms var(--ease-out);
+  }
+  :global(:root[data-headline='broken']) .rubble {
+    grid-template-rows: var(--rubble-h, 96px);
+  }
+  .run-tests {
+    position: absolute;
+    right: 0;
+    bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    cursor: pointer;
+    animation: run-in 300ms var(--ease-out) 700ms both;
+    transition: transform 160ms var(--ease-out);
+  }
+  .run-tests[hidden] {
+    display: none;
+  }
+  .run-tests:active {
+    transform: scale(0.97);
+  }
+  .run-tests svg {
+    width: 14px;
+    height: 14px;
+    fill: var(--term-pass);
+  }
+  @keyframes run-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .run-tests {
+      animation: none;
+    }
+  }
+  /* Simulated failure in the test panel, shown only while the headline is broken. */
+  .sim-only,
+  .term-body li.sim-only {
+    display: none;
+  }
+  :global(:root[data-headline='broken']) span.sim-only {
+    display: inline;
+  }
+  :global(:root[data-headline='broken']) .term-body li.sim-only {
+    display: grid;
+  }
+  :global(:root[data-headline='broken']) .real-only {
+    display: none;
+  }
+  .term-fail {
+    color: #ff8a7a;
+  }
+  .failed-test {
+    display: block;
+    color: #ff8a7a;
+  }
+
+  .hero-intro {
+    margin-top: 24px;
+    max-width: 52ch;
+    font-size: clamp(1.05rem, 1rem + 0.3vw, 1.2rem);
+    color: var(--ink-2);
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 32px;
+  }
+
+  /* Terminal panel. On desktop the list is always open and the summary is hidden;
+     on phones it collapses to the summary line until tapped. */
+  .term-summary {
+    display: none;
+  }
+  .term-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Terminal panel */
+  .term {
+    margin: 0;
+    background: var(--term);
+    color: var(--term-text);
+    border-radius: var(--radius);
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 0.06) inset,
+      0 24px 60px -24px rgb(20 20 18 / 0.45);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    line-height: 1.7;
+    overflow: hidden;
+  }
+  .term-bar,
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  }
+  .term-bar span,
+  .browser-bar span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgb(255 255 255 / 0.18);
+  }
+  .term-bar p {
+    margin-left: 10px;
+    color: var(--term-dim);
+    font-size: 0.72rem;
+  }
+  .term-body {
+    padding: 18px 20px 20px;
+  }
+  .term-body ul {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 12px;
+  }
+  .term-body li {
+    display: grid;
+    grid-template-columns: 1.4em minmax(0, 1fr);
+    gap: 6px;
+  }
+  .term-body .name {
+    min-width: 0;
+  }
+  .term-body .ok .tick,
+  .term-pass {
+    color: var(--term-pass);
+  }
+  .term-body .fail .tick {
+    color: #ff8a7a;
+  }
+  .term-dim {
+    color: var(--term-dim);
+  }
+  .term-cmd {
+    margin-bottom: 2px;
+  }
+  .term-total {
+    font-weight: 500;
+  }
+  .term figcaption {
+    padding: 12px 20px;
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+    color: var(--term-dim);
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .term-body li,
+    .term-total {
+      animation: line-in 260ms var(--ease-out) both;
+      animation-delay: calc(400ms + var(--i) * 110ms);
+    }
+  }
+  @keyframes line-in {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+    }
+  }
+
+  /* Section heads */
+  .section-head h2,
+  .contact h2 {
+    margin-top: 0;
+    font-size: clamp(1.9rem, 1.3rem + 2.4vw, 3rem);
+    font-weight: 720;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+  .experience,
+  .skills {
+    padding-block: clamp(56px, 7vw, 96px);
+  }
+  .section-lede {
+    margin-top: 12px;
+    max-width: 60ch;
+    font-size: clamp(1rem, 0.96rem + 0.25vw, 1.15rem);
+    color: var(--ink-2);
+  }
+
+  .skills .now {
+    margin-top: clamp(32px, 5vw, 56px);
+  }
+  .now {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 8px clamp(28px, 5vw, 72px);
+    margin-top: clamp(40px, 6vw, 72px);
+    padding: clamp(24px, 4vw, 40px);
+    background: var(--paper-2);
+    border-radius: var(--radius);
+  }
+  .now p:not(.label) {
+    color: var(--ink-2);
+    max-width: 60ch;
+  }
+  .now .visit {
+    grid-column: 2;
+    margin-top: 8px;
+  }
+
+  /* Experience */
+  .exp-role {
+    margin-top: 18px;
+    font-size: clamp(1.3rem, 1.15rem + 0.6vw, 1.6rem);
+    font-weight: 680;
+    letter-spacing: -0.02em;
+  }
+  .exp-meta {
+    margin-top: 4px;
+    color: var(--ink-2);
+  }
+  .exp-more {
+    margin-top: clamp(32px, 4vw, 48px);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .exp-more > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 56px;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+  }
+  .exp-more > summary::-webkit-details-marker {
+    display: none;
+  }
+  .exp-more > summary::after {
+    content: '+';
+    font-family: var(--mono);
+    font-size: 1.2rem;
+    color: var(--ink-3);
+    transition: transform 200ms var(--ease-out);
+  }
+  .exp-more[open] > summary::after {
+    transform: rotate(45deg);
+  }
+  .exp-more .exp-groups {
+    margin-top: 8px;
+    padding-bottom: 32px;
+  }
+  .exp-context {
+    margin-top: 4px;
+    color: var(--ink-3);
+    max-width: 60ch;
+  }
+  .exp-groups {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(32px, 4vw, 48px) clamp(24px, 4vw, 64px);
+    margin-top: clamp(32px, 5vw, 56px);
+  }
+  .exp-group h3 {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ink);
+    color: var(--ink);
+  }
+  .exp-group ul {
+    margin-top: 16px;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 14px;
+  }
+  .exp-group li {
+    color: var(--ink-2);
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+
+  /* Skills */
+  .skills-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: clamp(32px, 5vw, 56px);
+    border-top: 1px solid var(--line);
+    border-left: 1px solid var(--line);
+  }
+  .skill {
+    padding: 22px 24px 26px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .skill h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+  }
+  .skill p {
+    margin-top: 10px;
+    color: var(--ink-2);
+  }
+  .pill {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--pass-tint);
+    color: var(--pass);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+  }
+  .edu {
+    margin-top: clamp(32px, 5vw, 56px);
+    padding: 0;
+    list-style: none;
+  }
+  .edu li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .edu h3 {
+    font-size: 1.1rem;
+    font-weight: 650;
+  }
+  .edu p {
+    color: var(--ink-3);
+    font-size: 0.95rem;
+  }
+
+  /* Contact */
+  .contact {
+    padding-block: clamp(72px, 10vw, 136px);
+    background: var(--term);
+    color: var(--term-text);
+  }
+  .contact .label {
+    color: var(--term-dim);
+  }
+  .contact h2 {
+    max-width: 18ch;
+  }
+  .contact-email {
+    display: inline-block;
+    margin-top: 32px;
+    font-size: clamp(1.4rem, 0.9rem + 2.6vw, 2.75rem);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    color: var(--term-pass);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 8px;
+    overflow-wrap: anywhere;
+  }
+  .contact-alt {
+    margin-top: 18px;
+    color: var(--term-dim);
+  }
+  .contact-alt a {
+    color: var(--term-text);
+    font-weight: 600;
+    text-underline-offset: 4px;
+    text-decoration-color: rgb(255 255 255 / 0.3);
+  }
+  .contact-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 32px;
+    padding: 0;
+    list-style: none;
+  }
+  .contact-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid rgb(255 255 255 / 0.22);
+    border-radius: 999px;
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  @media (hover: hover) {
+    .contact-links a:hover {
+      background: var(--term-text);
+      color: var(--term);
+    }
+  }
+
+  /* Responsive */
+  /* Up to small laptops the hero stacks and the test list collapses to one line,
+     so the result stays near the buttons instead of in a tall narrow panel. */
+  @media (max-width: 1100px) {
+    .hero,
+    .now {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .now .visit {
+      grid-column: 1;
+    }
+    .hero {
+      gap: 28px;
+      padding-block: 36px 44px;
+    }
+    .term-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 64px;
+      padding: 12px 16px 12px 20px;
+      cursor: pointer;
+      list-style: none;
+    }
+    .term-summary-text {
+      display: grid;
+      gap: 2px;
+    }
+    .term-summary-text > :first-child {
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+    .term-summary-text > :last-child {
+      font-size: 0.72rem;
+    }
+    .term-toggle {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      border: 1px solid rgb(255 255 255 / 0.2);
+      border-radius: 999px;
+      font-size: 0.72rem;
+      color: var(--term-text);
+    }
+    .term-toggle::before {
+      content: 'Show tests';
+    }
+    details[open] .term-toggle::before {
+      content: 'Hide';
+    }
+    details[open] .term-summary {
+      border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    }
+    /* The summary line already names the suite, so the fake window bar and caption go. */
+    .term-bar,
+    .term figcaption {
+      display: none;
+    }
+  }
+  @media (max-width: 960px) {
+    .now .visit {
+      grid-column: 1;
+    }
+    .skills-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 640px) {
+    .exp-groups,
+    .skills-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Short laptop screens (1280x720 and similar): keep the buttons and the test result above the fold. */
+  @media (min-width: 961px) and (max-height: 820px) {
+    .hero {
+      padding-block: 36px 48px;
+    }
+    .hero-role {
+      margin-top: 20px;
+    }
+    h1 {
+      font-size: clamp(2.5rem, 1.5rem + 3vw, 3.6rem);
+    }
+    .hero-intro {
+      margin-top: 18px;
+    }
+    .hero-actions {
+      margin-top: 24px;
+    }
+    .term {
+      line-height: 1.55;
+    }
+  }
+</style>

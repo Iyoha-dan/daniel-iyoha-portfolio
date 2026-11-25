@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Site feedback from the card after the bug hunt (src/components/Feedback.astro).
+// Visitors can only add a well-formed answer. Nobody can read, change or delete answers from the
+// web; Daniel reads them in the Firebase console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /feedback/{id} {
+      allow create: if isAnswer(request.resource.data);
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isAnswer(d) {
+      return d.keys().hasOnly(['ease', 'note', 'device', 'createdAt'])
+        && d.keys().hasAll(['device', 'createdAt'])
+        && ('ease' in d || 'note' in d)
+        && (!('ease' in d) || (d.ease is int && d.ease >= 1 && d.ease <= 5))
+        && (!('note' in d) || (d.note is string && d.note.size() > 0 && d.note.size() <= 1000))
+        && d.device in ['phone', 'tablet', 'desktop']
+        && d.createdAt == request.time;
+    }
+  }
+}

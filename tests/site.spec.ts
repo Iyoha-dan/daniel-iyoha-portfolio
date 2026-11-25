@@ -1,0 +1,510 @@
+import { test, expect } from '@playwright/test';
+import { hireRoutes, projects, testimonials } from '../src/data/profile';
+import { caseStudies } from '../src/data/case-studies';
+
+test.beforeEach(async ({ page }) => {
+  // Tests never write to the real feedback database.
+  await page.route('**/firestore.googleapis.com/**', (route) => route.fulfill({ status: 200, body: '{}' }));
+  await page.goto('/');
+});
+
+test.describe('home', () => {
+  test('has one h1 and a descriptive title', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page).toHaveTitle(/Daniel Iyoha/);
+  });
+
+  test('lists every project once, each with a proof figure', async ({ page }) => {
+    const rows = page.locator('[data-index-list] a');
+    await expect(rows).toHaveCount(projects.length);
+    for (const [i, p] of projects.entries()) {
+      await expect(rows.nth(i).locator('.row-title')).toHaveText(p.title);
+      if (p.stat) await expect(rows.nth(i).locator('.row-proof')).toHaveText(p.stat);
+    }
+  });
+
+  test('old links to the Websites and QA sections land on the work', async ({ page }) => {
+    for (const old of ['websites', 'qa']) {
+      await page.goto(`/#${old}`);
+      await expect(page.locator('#work h2')).toBeInViewport();
+    }
+  });
+});
+
+test.describe('testimonials', () => {
+  test('show only real quotes, each with a named author', async ({ page }) => {
+    const quotes = page.locator('#testimonials figure.quote');
+    // Hidden entirely until the data file has a quote.
+    await expect(page.locator('#testimonials')).toHaveCount(testimonials.length ? 1 : 0);
+    await expect(quotes).toHaveCount(testimonials.length);
+    for (const t of testimonials) {
+      // The longest quote is shown first, so find each one by its author.
+      const quote = quotes.filter({ has: page.locator('.name', { hasText: t.name }) });
+      await expect(quote.locator('blockquote')).toHaveText(t.quote);
+      // A highlight only emphasises the quote's own words, never adds any.
+      if (t.highlight) await expect(quote.locator('mark')).toHaveText(t.highlight);
+      await expect(quote.locator('.name')).toHaveText(t.name);
+      await expect(quote.locator('.role')).toContainText(t.role);
+    }
+  });
+});
+
+test.describe('navigation', () => {
+  for (const name of ['Work', 'Experience', 'Skills', 'Contact']) {
+    test(`${name} link scrolls to its section`, async ({ page }) => {
+      await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`#${name.toLowerCase()}$`));
+      await expect(page.locator(`#${name.toLowerCase()} h2`)).toBeInViewport();
+    });
+  }
+});
+
+test.describe('hiring menu', () => {
+  const menuButton = (page) => page.getByRole('button', { name: 'Hiring?' });
+  const panel = (page) => page.getByRole('group', { name: 'The short route' });
+  const expectedHref = (slug: string, home = true) =>
+    slug === 'tests' ? `${home ? '' : '/'}#test-run` : slug === 'websites' ? '/websites' : `/work/${slug}`;
+
+  test('each kind of hire gets its own three picks and next step', async ({ page }) => {
+    await menuButton(page).click();
+    await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
+    for (const route of hireRoutes) {
+      await panel(page).getByRole('radio', { name: route.label }).check();
+      const shown = panel(page).locator(`[data-route="${route.id}"]`);
+      await expect(shown).toBeVisible();
+      // Only the picked route is on screen.
+      await expect(panel(page).locator('.hire-route:visible')).toHaveCount(1);
+      const hrefs = await shown.locator('li a').evaluateAll((links) => links.map((a) => a.getAttribute('href')));
+      expect(hrefs).toEqual(route.picks.map((p) => expectedHref(p.slug)));
+      for (const href of hrefs) if (!href!.startsWith('#')) expect((await page.request.get(href!)).ok()).toBe(true);
+      const primary = shown.locator('.hire-actions a.solid');
+      if (route.primary === 'cv') await expect(primary).toHaveAttribute('href', '/Daniel_Iyoha_CV.pdf');
+      else await expect(primary).toHaveAttribute('href', /wa\.me\/.*website/);
+    }
+  });
+
+  test('Escape or a click outside closes it', async ({ page }) => {
+    await menuButton(page).click();
+    await expect(panel(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel(page)).toBeHidden();
+    await expect(menuButton(page)).toBeFocused();
+    await menuButton(page).click();
+    await page.mouse.click(5, 500);
+    await expect(panel(page)).toBeHidden();
+  });
+
+  test('remembers the pick on the next page', async ({ page }) => {
+    await menuButton(page).click();
+    await panel(page).getByRole('radio', { name: 'A business website' }).check();
+    await page.goto('/work/linkhut');
+    await menuButton(page).click();
+    await expect(panel(page).locator('[data-route="business"]')).toBeVisible();
+    await expect(panel(page).getByRole('link', { name: /All the ways to reach me/ })).toHaveAttribute('href', '/#contact');
+  });
+
+  test('on a phone it takes the Contact pill’s place and fits the screen', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await expect(page.getByRole('navigation', { name: 'Sections' })).toBeHidden();
+    await menuButton(page).click();
+    const box = (await panel(page).boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(360);
+    await expect(panel(page).getByRole('link', { name: /All the ways to reach me/ })).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe('links', () => {
+  test('external links open safely in a new tab', async ({ page }) => {
+    const external = page.locator('a[href^="http"]');
+    expect(await external.count()).toBeGreaterThan(0);
+    for (const link of await external.all()) {
+      await expect(link).toHaveAttribute('target', '_blank');
+      await expect(link).toHaveAttribute('rel', /noopener/);
+    }
+  });
+
+  test('CV download serves a PDF', async ({ page, request }) => {
+    const href = await page.getByRole('link', { name: 'Download CV' }).first().getAttribute('href');
+    const response = await request.get(href!);
+    expect(response.ok()).toBe(true);
+    expect(response.headers()['content-type']).toContain('application/pdf');
+  });
+
+  test('WhatsApp links open a chat with a message started', async ({ page }) => {
+    const links = page.locator('#contact a[href^="https://wa.me/"]');
+    await expect(links).toHaveCount(1);
+    for (const link of await links.all()) {
+      const url = new URL((await link.getAttribute('href'))!);
+      expect(url.pathname).toBe('/2349030851695');
+      expect(url.searchParams.get('text')).toMatch(/^Hi Daniel/);
+    }
+  });
+
+  test('email link opens a new message', async ({ page }) => {
+    await expect(page.locator('.contact-email')).toHaveAttribute('href', 'mailto:danieliyoha6@gmail.com');
+  });
+});
+
+test.describe('accessibility', () => {
+  test('every image has alt text', async ({ page }) => {
+    for (const img of await page.locator('img').all()) {
+      await expect(img).toHaveAttribute('alt', /.*/);
+    }
+  });
+
+  test('skip link moves focus to the content', async ({ page }) => {
+    await page.keyboard.press('Tab');
+    const skip = page.getByRole('link', { name: 'Skip to content' });
+    await expect(skip).toBeFocused();
+    await skip.press('Enter');
+    await expect(page).toHaveURL(/#main$/);
+  });
+});
+
+test.describe('local time', () => {
+  test('shows the current time in Lagos', async ({ page }) => {
+    const lagos = () =>
+      new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' }).format(new Date());
+    const before = lagos();
+    const shown = await page.locator('[data-lagos-time]').textContent();
+    // Allow for the minute ticking over between reading the page and checking.
+    expect([before, lagos()]).toContain(shown);
+  });
+});
+
+test.describe('work index', () => {
+  test('lists every project and hovering one previews it', async ({ page }) => {
+    const rows = page.locator('[data-index-list] a');
+    await rows.nth(2).hover();
+    await expect(page.locator('[data-card="2"]')).toHaveAttribute('data-active', '');
+    // Each row opens its case study, or its section when there is no case study yet.
+    for (const row of await rows.all()) {
+      const href = (await row.getAttribute('href'))!;
+      if (href.startsWith('#')) await expect(page.locator(href)).toHaveCount(1);
+      else expect((await page.request.get(href)).ok()).toBe(true);
+    }
+  });
+
+  test('hovering a row shows its preview, and the preview opens the page', async ({ page }) => {
+    // Tall enough to show the whole Work section, so nothing scrolls under the mouse mid-test.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('#work').scrollIntoViewIfNeeded();
+    const rows = page.locator('[data-index-list] a');
+    const preview = page.locator('[data-card][data-active]');
+    await expect(preview).toHaveAttribute('data-card', '0');
+    await rows.nth(1).hover();
+    await expect(preview).toHaveAttribute('data-card', '1');
+    // Move across to the preview like a person would; passing over other rows must not switch it.
+    const box = (await page.locator('[data-stack]').boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+    await page.waitForTimeout(200);
+    await expect(preview).toHaveAttribute('data-card', '1');
+    const target = (await rows.nth(1).getAttribute('href'))!;
+    await page.mouse.down();
+    await page.mouse.up();
+    // The preview opens the same page as its row.
+    await expect(page).toHaveURL((url) => url.pathname === target);
+  });
+
+  test('keyboard focus moves the preview too', async ({ page }) => {
+    await page.locator('[data-index-list] a').nth(3).focus();
+    await expect(page.locator('[data-card][data-active]')).toHaveAttribute('data-card', '3');
+  });
+
+  test('phones get the whole list, each project with a thumbnail', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.locator('[data-stack]')).toBeHidden();
+    const rows = page.locator('[data-index-list] a');
+    await expect(rows).toHaveCount(projects.length);
+    for (const row of await rows.all()) {
+      await expect(row).toBeVisible();
+      await expect(row.locator('.row-thumb')).toBeVisible();
+    }
+  });
+});
+
+test.describe('headline', () => {
+  test('breaks on click and the tests put it back', async ({ page }) => {
+    const root = page.locator('html');
+    await expect(page.locator('h1')).toHaveText('I build websites, then I try to break them.');
+    await page.getByRole('button', { name: 'break them.' }).click();
+    await expect(root).toHaveAttribute('data-headline', 'broken');
+    await expect(page.locator('.term-body li.sim-only')).toBeVisible();
+    const runTests = page.getByRole('button', { name: 'Run tests' });
+    await runTests.click();
+    await expect(root).not.toHaveAttribute('data-headline');
+    await expect(runTests).toBeHidden();
+    await expect(page.locator('.term-body li.sim-only')).toBeHidden();
+  });
+});
+
+test.describe('underline', () => {
+  test('a dashed underline sits under each breakable word', async ({ page }) => {
+    const words = page.locator('.breakable .word');
+    await expect(words).toHaveCount(2);
+    for (const word of await words.all()) {
+      expect(await word.evaluate((w) => getComputedStyle(w, '::after').borderBottomStyle)).toBe('dashed');
+    }
+  });
+});
+
+test.describe('theme', () => {
+  test('toggle switches the theme and remembers it', async ({ page }) => {
+    const root = page.locator('html');
+    const toggle = page.getByRole('button', { name: /Switch to (dark|light) theme/ });
+    const before = (await toggle.getAttribute('aria-label'))!.includes('dark') ? 'light' : 'dark';
+    const after = before === 'dark' ? 'light' : 'dark';
+    await toggle.click();
+    await expect(root).toHaveAttribute('data-theme', after);
+    await expect(toggle).toHaveAttribute('aria-label', `Switch to ${before} theme`);
+    await page.reload();
+    await expect(root).toHaveAttribute('data-theme', after);
+  });
+});
+
+test.describe('phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('test results collapse to one line and open on tap', async ({ page }) => {
+    const panel = page.locator('#test-run');
+    await expect(panel).not.toHaveAttribute('open');
+    // The summary shows the previous run's result, passed or failed; this test is about the collapse.
+    await expect(panel.locator('summary')).toContainText(/tests? (passed|failed)/);
+    await expect(panel.locator('li:not(.sim-only)').first()).toBeHidden();
+    await panel.locator('summary').click();
+    await expect(panel.locator('li:not(.sim-only)').first()).toBeVisible();
+  });
+});
+
+test.describe('project pages', () => {
+  const withPages = projects.filter((p) => caseStudies[p.slug]);
+
+  for (const p of withPages) {
+    test(`${p.slug} page tells the story and links on`, async ({ page }) => {
+      await page.goto(`/work/${p.slug}`);
+      await expect(page.locator('h1')).toHaveText(p.title);
+      await expect(page.locator('.lede')).toHaveText(caseStudies[p.slug].lede);
+      await expect(page.locator('.case-body h2').first()).toBeVisible();
+      await expect(page.getByRole('link', { name: 'All work' })).toHaveAttribute('href', '/#work');
+      // Websites say how they were built and how they were checked.
+      if (p.group === 'web') {
+        await expect(page.getByRole('heading', { name: 'What I built' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'How I checked it' })).toBeVisible();
+      }
+      // "Next project" leads to another real page.
+      const next = (await page.getByRole('navigation', { name: 'Next project' }).getByRole('link').getAttribute('href'))!;
+      expect((await page.request.get(next)).ok()).toBe(true);
+      // It ends with a way to get in touch.
+      const cta = page.locator('.cta');
+      await expect(cta.getByRole('link', { name: 'Email me' })).toHaveAttribute('href', /^mailto:/);
+      await expect(cta.getByRole('link', { name: /WhatsApp/ })).toHaveAttribute('href', /^https:\/\/wa\.me\//);
+    });
+  }
+
+  test('every work row opens a case study page', async ({ page }) => {
+    const hrefs = await page.locator('[data-index-list] a').evaluateAll((rows) => rows.map((r) => r.getAttribute('href')));
+    expect(hrefs.filter((h) => h?.startsWith('/work/'))).toHaveLength(withPages.length);
+  });
+
+  test('a project page has no sideways scroll on a 360px phone', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto(`/work/${withPages[0].slug}`);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('QA pages show real results, not placeholders', async ({ page }) => {
+    for (const p of withPages.filter((q) => q.group === 'qa')) {
+      await page.goto(`/work/${p.slug}`);
+      const report = page.locator('[data-report]');
+      await expect(report.locator('.redacted')).toHaveCount(0);
+      if (p.results) {
+        await expect(report).toContainText(`${p.results.passed} passed`);
+        await expect(report).toContainText(`${p.results.failed} failed`);
+      }
+      for (const b of p.bugs ?? []) await expect(report).toContainText(b.id);
+      for (const c of p.results ? [] : p.checks ?? []) await expect(report).toContainText(c);
+    }
+  });
+
+  test('a project page says each thing once', async ({ page }) => {
+    await page.goto('/work/linkhut');
+    // "What I found" already gives the results, so there is no separate Outcome block.
+    await expect(page.getByRole('heading', { name: 'Outcome' })).toHaveCount(0);
+    for (const p of withPages.filter((q) => q.stack)) {
+      await page.goto(`/work/${p.slug}`);
+      // The stack is listed under "Built with", not repeated in the facts strip.
+      await expect(page.locator('.facts dt', { hasText: 'Stack' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Built with' })).toBeVisible();
+    }
+  });
+
+  test('"Next project" says where you are in the list', async ({ page }) => {
+    await page.goto(`/work/${withPages[0].slug}`);
+    await expect(page.getByRole('navigation', { name: 'Next project' })).toContainText(`2 of ${withPages.length}`);
+    await page.goto(`/work/${withPages.at(-1)!.slug}`);
+    await expect(page.getByRole('navigation', { name: 'Next project' })).toContainText(`1 of ${withPages.length}`);
+  });
+});
+
+test.describe('missing pages', () => {
+  test('an unknown address gets a 404 with a way back', async ({ page }) => {
+    const res = await page.goto('/no-such-page');
+    expect(res?.status()).toBe(404);
+    await expect(page.locator('h1')).toHaveText('This page failed its test.');
+    await expect(page.locator('[data-path]')).toHaveText('/no-such-page');
+    await expect(page.getByRole('link', { name: 'See my work' })).toHaveAttribute('href', '/#work');
+    await expect(page.getByRole('navigation', { name: 'Projects' }).getByRole('link')).toHaveCount(projects.length);
+  });
+});
+
+test.describe('bug hunt', () => {
+  const bugs = ['delivery', 'total', 'phone', 'pay', 'coupon'];
+  const spot = (page, id) => page.locator(`#bug-hunt [data-spot="${id}"]`);
+
+  test('finding all five bugs ends the game', async ({ page }) => {
+    await page.locator('#bug-hunt').scrollIntoViewIfNeeded();
+    for (const id of bugs) await spot(page, id).click();
+    await expect(page.locator('#bug-hunt [data-found]')).toHaveText('5');
+    await expect(page.locator('#bug-hunt .found-list li.is-found')).toHaveCount(5);
+    await expect(page.locator('#bug-hunt [data-end-line]')).toContainText('All 5');
+  });
+
+  test('tapping something that works counts as a miss', async ({ page }) => {
+    await spot(page, 'title').click();
+    await expect(page.locator('#bug-hunt [data-misses]')).toHaveText('1');
+    await expect(page.locator('#bug-hunt [data-found]')).toHaveText('0');
+  });
+
+  test('can be played with a keyboard', async ({ page }) => {
+    await spot(page, 'total').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#bug-hunt [data-found]')).toHaveText('1');
+  });
+
+  test('when time runs out, the missed bugs are shown', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/');
+    await spot(page, 'phone').click();
+    await page.clock.runFor(61_000);
+    await expect(page.locator('#bug-hunt .found-list li.is-missed')).toHaveCount(4);
+    await expect(page.locator('#bug-hunt [data-end-line]')).toContainText('1 of 5');
+  });
+});
+
+test.describe('site feedback', () => {
+  const card = (page) => page.locator('[data-feedback]');
+  const winGame = async (page) => {
+    await page.locator('#bug-hunt').scrollIntoViewIfNeeded();
+    for (const id of ['delivery', 'total', 'phone', 'pay', 'coupon']) await page.locator(`#bug-hunt [data-spot="${id}"]`).click();
+  };
+  // Catches what would be sent to Firestore and answers with the given status.
+  const capture = async (page, status = 200) => {
+    const sent: any[] = [];
+    await page.route('**/firestore.googleapis.com/**', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status, body: '{}' });
+    });
+    return sent;
+  };
+  const fields = (body) => body.writes[0].update.fields;
+
+  test('appears only after a game, then sends the rating and the note', async ({ page }) => {
+    const sent = await capture(page);
+    await expect(card(page)).toBeHidden();
+    await winGame(page);
+    await expect(card(page)).toBeVisible();
+    await expect(card(page).locator('[data-fb-next]')).toBeDisabled();
+    await card(page).getByRole('radio', { name: '4' }).check();
+    await card(page).getByRole('button', { name: 'Next' }).click();
+    await card(page).getByLabel('Anything broken or confusing?').fill('The coupon button looked off on my phone.');
+    await card(page).getByRole('button', { name: 'Send' }).click();
+    await expect(card(page).locator('[data-fb-done]')).toBeVisible();
+    expect(sent).toHaveLength(1);
+    expect(fields(sent[0])).toEqual({
+      device: { stringValue: 'desktop' },
+      ease: { integerValue: '4' },
+      note: { stringValue: 'The coupon button looked off on my phone.' },
+    });
+    expect(sent[0].writes[0].updateTransforms).toEqual([{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }]);
+    // Never asks the same visitor twice.
+    await page.reload();
+    await winGame(page);
+    await page.waitForTimeout(1200);
+    await expect(card(page)).toBeHidden();
+  });
+
+  test('Skip sends the rating alone', async ({ page }) => {
+    const sent = await capture(page);
+    await winGame(page);
+    await card(page).getByRole('radio', { name: '2' }).check();
+    await card(page).getByRole('button', { name: 'Next' }).click();
+    await card(page).getByRole('button', { name: 'Skip' }).click();
+    await expect(card(page).locator('[data-fb-done]')).toBeVisible();
+    expect(fields(sent[0])).toEqual({ device: { stringValue: 'desktop' }, ease: { integerValue: '2' } });
+  });
+
+  test('"Not now" closes it for good and sends nothing', async ({ page }) => {
+    const sent = await capture(page);
+    await winGame(page);
+    await card(page).getByRole('button', { name: 'Not now' }).first().click();
+    await expect(card(page)).toBeHidden();
+    await page.reload();
+    await winGame(page);
+    await page.waitForTimeout(1200);
+    await expect(card(page)).toBeHidden();
+    expect(sent).toHaveLength(0);
+  });
+
+  test('a failed send says so and keeps the answers', async ({ page }) => {
+    await capture(page, 500);
+    await winGame(page);
+    await card(page).getByRole('radio', { name: '5' }).check();
+    await card(page).getByRole('button', { name: 'Next' }).click();
+    await card(page).getByLabel('Anything broken or confusing?').fill('Nothing, nice site.');
+    await card(page).getByRole('button', { name: 'Send' }).click();
+    await expect(card(page).getByRole('alert')).toBeVisible();
+    await expect(card(page).getByLabel('Anything broken or confusing?')).toHaveValue('Nothing, nice site.');
+    await expect(card(page).locator('[data-fb-done]')).toBeHidden();
+  });
+});
+
+test.describe('small-business page', () => {
+  test('is linked from the homepage and leads with Ellanielos', async ({ page }) => {
+    await page.getByRole('link', { name: 'See how I work' }).click();
+    await expect(page).toHaveURL(/\/websites$/);
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Ellanielos Concept' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Read the full story' })).toHaveAttribute('href', '/work/ellanielos');
+  });
+
+  test('every WhatsApp button starts a website enquiry', async ({ page }) => {
+    await page.goto('/websites');
+    const links = page.locator('a[href^="https://wa.me/"]');
+    expect(await links.count()).toBeGreaterThan(0);
+    for (const link of await links.all()) {
+      const url = new URL((await link.getAttribute('href'))!);
+      expect(url.searchParams.get('text')).toMatch(/website for my business/);
+      await expect(link).toHaveAttribute('rel', /noopener/);
+    }
+  });
+
+  test('has no sideways scroll on a 360px phone', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto('/websites');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe('responsive', () => {
+  test('no sideways scroll on a 360px phone', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});

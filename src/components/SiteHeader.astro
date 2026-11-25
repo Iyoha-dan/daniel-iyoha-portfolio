@@ -1,0 +1,118 @@
+---
+// Sticky header shared by every page. On the homepage the links scroll within the page;
+// elsewhere they lead back to the homepage sections.
+import ThemeToggle from './ThemeToggle.astro';
+import HireMenu from './HireMenu.astro';
+import { person } from '../data/profile';
+
+interface Props {
+  home?: boolean;
+}
+const { home = false } = Astro.props;
+const to = (id: string) => (home ? `#${id}` : `/#${id}`);
+
+const nav = [
+  { id: 'work', label: 'Work' },
+  { id: 'experience', label: 'Experience' },
+  { id: 'skills', label: 'Skills' },
+];
+---
+
+<header class="top">
+  <div class="scroll-progress" aria-hidden="true"></div>
+  <div class="wrap top-inner">
+    <a class="brand" href={home ? '#main' : '/'} aria-label={home ? `${person.name}, back to top` : `${person.name}, home`}>
+      <img src="/favicon.svg" alt="" width="26" height="26" />
+      <span>{person.name}</span>
+    </a>
+    <div class="top-actions">
+      <HireMenu home={home} />
+      <nav aria-label="Sections">
+        <ul>
+          {nav.map((item) => <li><a href={to(item.id)}>{item.label}</a></li>)}
+          <li><a class="nav-cta" href={to('contact')}>Contact</a></li>
+        </ul>
+      </nav>
+      <ThemeToggle />
+    </div>
+  </div>
+</header>
+
+<style>
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .top-inner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 64px;
+    gap: 16px;
+  }
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+  .top ul {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+  }
+  .top nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    text-decoration: none;
+    color: var(--ink-2);
+    transition:
+      color 150ms ease,
+      background-color 150ms ease;
+  }
+  .top nav a.nav-cta {
+    background: var(--ink);
+    color: var(--paper);
+    margin-left: 6px;
+  }
+  @media (hover: hover) {
+    .top nav a:not(.nav-cta):hover {
+      color: var(--ink);
+      background: var(--paper-2);
+    }
+  }
+  .top-actions :global(.hire) {
+    margin-right: 8px;
+  }
+  /* Phones: no room for both, so "Hiring?" (which ends with every way to get in touch) takes the
+     Contact pill's place and its dark style. */
+  @media (max-width: 560px) {
+    .top nav {
+      display: none;
+    }
+    .top-actions :global(.hire-btn) {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--paper);
+    }
+  }
+</style>
