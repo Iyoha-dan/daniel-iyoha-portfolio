@@ -1,17 +1,25 @@
 rules_version = '2';
 
 // Site feedback from the card after the bug hunt (src/components/Feedback.astro).
-// Visitors can only add a well-formed answer. Nobody can read, change or delete answers from the
-// web; Daniel reads them in the Firebase console.
+// Visitors can only add a well-formed answer. Only Daniel, signed in with his Google account,
+// can read answers (the private /inbox page); nobody can change or delete them from the web.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /feedback/{id} {
       allow create: if isAnswer(request.resource.data);
-      allow read, update, delete: if false;
+      allow read: if isDaniel();
+      allow update, delete: if false;
     }
 
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    function isDaniel() {
+      return request.auth != null
+        && request.auth.token.email == 'danieliyoha6@gmail.com'
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
     function isAnswer(d) {

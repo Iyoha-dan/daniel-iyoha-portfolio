@@ -434,6 +434,26 @@ test.describe('bug hunt', () => {
   });
 });
 
+test.describe('private inbox', () => {
+  test('asks for sign-in, reads nothing before it, and stays out of search', async ({ page }) => {
+    const reads: string[] = [];
+    page.on('request', (r) => r.url().includes('firestore.googleapis.com') && reads.push(r.url()));
+    await page.goto('/inbox');
+    await expect(page.getByRole('heading', { name: 'Private inbox' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    await page.waitForTimeout(500);
+    expect(reads).toHaveLength(0);
+  });
+
+  test('is not linked from the site', async ({ page }) => {
+    for (const path of ['/', '/websites', '/work/linkhut']) {
+      await page.goto(path);
+      await expect(page.locator('a[href*="inbox"]')).toHaveCount(0);
+    }
+  });
+});
+
 test.describe('bug blaster', () => {
   const game = (page) => page.locator('[data-blaster-dialog]');
   const play = (page) => page.locator('[data-blaster]').getByRole('button', { name: 'Play' });

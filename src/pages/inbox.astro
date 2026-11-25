@@ -1,0 +1,459 @@
+---
+// Private feedback inbox: Daniel signs in with Google and reads the answers from the feedback card.
+// Not linked anywhere and not indexed. The privacy comes from firestore.rules (only his verified
+// Google account can read `feedback`); this page just shows what Firestore lets it see.
+import Base from '../layouts/Base.astro';
+import { person } from '../data/profile';
+---
+
+<Base title={`Inbox · ${person.name}`} description="Private feedback inbox." noindex>
+  <header class="top wrap">
+    <a class="brand" href="/">
+      <img src="/favicon.svg" alt="" width="24" height="24" />
+      <span>Inbox</span>
+    </a>
+    <div class="who" data-who hidden>
+      <span data-email></span>
+      <button type="button" class="link" data-sign-out>Sign out</button>
+    </div>
+  </header>
+
+  <main id="main" class="wrap inbox" data-inbox data-view="loading">
+    <p class="state" data-show="loading">Checking sign-in…</p>
+
+    <section class="gate" data-show="out">
+      <h1>Private inbox</h1>
+      <p>Answers from the feedback card on the site. Sign in with Daniel's Google account to read them.</p>
+      <button type="button" class="btn btn-solid" data-sign-in>Sign in with Google</button>
+      <p class="error" data-error hidden></p>
+    </section>
+
+    <section class="gate" data-show="denied">
+      <h1>This inbox is private</h1>
+      <p>You're signed in as <strong data-denied-email></strong>, which can't read the feedback.</p>
+      <button type="button" class="btn btn-ghost" data-sign-out>Sign out</button>
+    </section>
+
+    <section data-show="in">
+      <div class="head">
+        <h1>Feedback</h1>
+        <p class="live"><span class="dot" aria-hidden="true"></span> Live: new answers appear here as they arrive.</p>
+      </div>
+
+      <dl class="stats">
+        <div><dt>Answers</dt><dd data-stat="count">0</dd></div>
+        <div><dt>Average ease</dt><dd><span data-stat="avg">–</span><small> / 5</small></dd></div>
+        <div><dt>With a note</dt><dd data-stat="notes">0</dd></div>
+        <div><dt>Latest</dt><dd data-stat="latest">–</dd></div>
+      </dl>
+
+      <div class="charts">
+        <figure class="chart">
+          <figcaption>“How easy was it to find what you needed?”</figcaption>
+          <ol class="bars" data-bars></ol>
+        </figure>
+        <figure class="chart">
+          <figcaption>Device</figcaption>
+          <ol class="bars" data-devices></ol>
+        </figure>
+      </div>
+
+      <div class="list-head">
+        <h2>Answers</h2>
+        <label class="only-notes"><input type="checkbox" data-only-notes /> Only answers with a note</label>
+      </div>
+      <p class="empty" data-empty hidden>No answers yet. They arrive after someone finishes a game and answers the card.</p>
+      <ol class="answers" data-answers></ol>
+    </section>
+
+    <p class="error" data-show="error" data-load-error></p>
+  </main>
+</Base>
+
+<script>
+  import { initializeApp } from 'firebase/app';
+  import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
+  import { getFirestore, collection, query, orderBy, limit, onSnapshot, type Timestamp } from 'firebase/firestore';
+
+  const OWNER = 'danieliyoha6@gmail.com';
+  const app = initializeApp({
+    apiKey: 'AIzaSyDfgkmRMWI5NAnYlib6ZPJQG8qdRkXO_KA',
+    // On the live site, sign in through its own domain (fewer third-party cookie problems).
+    authDomain: location.hostname.endsWith('.web.app') ? location.hostname : 'daniel-iyoha.firebaseapp.com',
+    projectId: 'daniel-iyoha',
+    appId: '1:974713456800:web:d932c1f8f58b58ede5a1c5',
+  });
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const root = document.querySelector<HTMLElement>('[data-inbox]')!;
+  const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
+  const setView = (v: 'loading' | 'out' | 'denied' | 'in' | 'error') => (root.dataset.view = v);
+
+  type Answer = { ease?: number; note?: string; device?: string; createdAt?: Timestamp };
+  let answers: Answer[] = [];
+  let stop: (() => void) | undefined;
+
+  const when = (t?: Timestamp) =>
+    t ? t.toDate().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : 'just now';
+
+  const bars = (el: HTMLElement, rows: { label: string; n: number }[]) => {
+    const max = Math.max(1, ...rows.map((r) => r.n));
+    el.replaceChildren(
+      ...rows.map((r) => {
+        const li = document.createElement('li');
+        li.innerHTML = '<span class="bar-label"></span><span class="bar-track"><span class="bar-fill"></span></span><span class="bar-n"></span>';
+        li.querySelector<HTMLElement>('.bar-label')!.textContent = r.label;
+        li.querySelector<HTMLElement>('.bar-fill')!.style.width = `${(r.n / max) * 100}%`;
+        li.querySelector<HTMLElement>('.bar-n')!.textContent = String(r.n);
+        return li;
+      }),
+    );
+  };
+
+  const render = () => {
+    const rated = answers.filter((a) => a.ease);
+    const notes = answers.filter((a) => a.note);
+    $('[data-stat="count"]').textContent = String(answers.length);
+    $('[data-stat="avg"]').textContent = rated.length ? (rated.reduce((s, a) => s + a.ease!, 0) / rated.length).toFixed(1) : '–';
+    $('[data-stat="notes"]').textContent = String(notes.length);
+    $('[data-stat="latest"]').textContent = answers[0] ? when(answers[0].createdAt) : '–';
+    bars($('[data-bars]'), [5, 4, 3, 2, 1].map((n) => ({ label: String(n), n: rated.filter((a) => a.ease === n).length })));
+    bars($('[data-devices]'), ['phone', 'tablet', 'desktop'].map((d) => ({ label: d, n: answers.filter((a) => a.device === d).length })));
+
+    const only = $<HTMLInputElement>('[data-only-notes]').checked;
+    const shown = only ? notes : answers;
+    $('[data-empty]').hidden = shown.length > 0;
+    $('[data-answers]').replaceChildren(
+      ...shown.map((a) => {
+        const li = document.createElement('li');
+        li.innerHTML = '<p class="meta"><span class="ease"></span><span class="when"></span><span class="device"></span></p><p class="note"></p>';
+        const ease = li.querySelector<HTMLElement>('.ease')!;
+        ease.textContent = a.ease ? `${a.ease}/5` : 'no rating';
+        if (a.ease) ease.dataset.ease = a.ease >= 4 ? 'good' : a.ease === 3 ? 'ok' : 'bad';
+        li.querySelector<HTMLElement>('.when')!.textContent = when(a.createdAt);
+        li.querySelector<HTMLElement>('.device')!.textContent = a.device ?? '';
+        const note = li.querySelector<HTMLElement>('.note')!;
+        note.textContent = a.note ?? 'No note.'; // text only: notes are visitor input
+        if (!a.note) note.classList.add('muted');
+        return li;
+      }),
+    );
+  };
+  $('[data-only-notes]').addEventListener('change', render);
+
+  onAuthStateChanged(auth, (user) => {
+    stop?.();
+    const signedIn = !!user;
+    $('[data-who]').hidden = !signedIn;
+    $('[data-email]').textContent = user?.email ?? '';
+    if (!user) return setView('out');
+    if (user.email !== OWNER) {
+      $('[data-denied-email]').textContent = user.email ?? 'this account';
+      return setView('denied');
+    }
+    setView('loading');
+    const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'), limit(1000));
+    stop = onSnapshot(
+      q,
+      (snap) => {
+        answers = snap.docs.map((d) => d.data() as Answer);
+        render();
+        setView('in');
+      },
+      (err) => {
+        $('[data-load-error]').textContent = `Couldn't load the answers (${err.code}).`;
+        setView('error');
+      },
+    );
+  });
+
+  $('[data-sign-in]').addEventListener('click', async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ login_hint: OWNER, prompt: 'select_account' });
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e: any) {
+      if (e?.code === 'auth/popup-blocked') return signInWithRedirect(auth, provider);
+      if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
+      const el = $('[data-error]');
+      el.hidden = false;
+      el.textContent = `Sign-in didn't work (${e?.code ?? 'unknown error'}).`;
+    }
+  });
+  document.querySelectorAll('[data-sign-out]').forEach((b) => b.addEventListener('click', () => signOut(auth)));
+</script>
+
+<style>
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 64px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink-3);
+  }
+  .who[hidden] {
+    display: none;
+  }
+  .link {
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .inbox {
+    padding-block: clamp(32px, 5vw, 64px);
+  }
+  [data-show] {
+    display: none;
+  }
+  [data-view='loading'] [data-show='loading'],
+  [data-view='out'] [data-show='out'],
+  [data-view='denied'] [data-show='denied'],
+  [data-view='in'] [data-show='in'],
+  [data-view='error'] [data-show='error'] {
+    display: block;
+  }
+  .state {
+    font-family: var(--mono);
+    color: var(--ink-3);
+  }
+  .gate {
+    max-width: 44ch;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 1.3rem + 2.4vw, 2.8rem);
+    font-weight: 720;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .gate p {
+    margin-top: 12px;
+    color: var(--ink-2);
+  }
+  .gate .btn {
+    margin-top: 20px;
+  }
+  .error {
+    margin-top: 14px;
+    color: var(--ink);
+  }
+  .error::before {
+    content: '✗ ';
+    color: #d64b3b;
+    font-weight: 700;
+  }
+  .error[hidden] {
+    display: none;
+  }
+
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+  }
+  .live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink-3);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--pass);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 24px 0 0;
+  }
+  .stats div {
+    padding: 16px;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+  }
+  .stats dt {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .stats dd {
+    margin: 6px 0 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats small {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .charts {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .chart {
+    margin: 0;
+    padding: 16px;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+  }
+  .chart figcaption {
+    font-size: 0.9rem;
+    color: var(--ink-2);
+  }
+  .bars {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 0;
+    list-style: none;
+  }
+  .bars :global(li) {
+    display: grid;
+    grid-template-columns: 4.5em 1fr 2.5em;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  .bars :global(.bar-track) {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--paper-2);
+    overflow: hidden;
+  }
+  .bars :global(.bar-fill) {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--pass);
+  }
+  .bars :global(.bar-n) {
+    text-align: right;
+    color: var(--ink-2);
+  }
+
+  .list-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+    margin-top: clamp(32px, 4vw, 48px);
+  }
+  .list-head h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  .only-notes {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .only-notes input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--pass);
+  }
+  .empty {
+    margin-top: 16px;
+    color: var(--ink-3);
+  }
+  .empty[hidden] {
+    display: none;
+  }
+  .answers {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 0;
+    list-style: none;
+  }
+  .answers :global(li) {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+  }
+  .answers :global(.meta) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--ink-3);
+  }
+  .answers :global(.ease) {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--paper-2);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .answers :global(.ease[data-ease='good']) {
+    background: var(--pass-tint);
+    color: var(--pass);
+  }
+  .answers :global(.ease[data-ease='bad']) {
+    background: #fbe4e1;
+    color: #8f1d14;
+  }
+  .answers :global(.note) {
+    margin-top: 8px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .answers :global(.note.muted) {
+    color: var(--ink-3);
+  }
+
+  @media (max-width: 760px) {
+    .stats {
+      grid-template-columns: 1fr 1fr;
+    }
+    .charts {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
