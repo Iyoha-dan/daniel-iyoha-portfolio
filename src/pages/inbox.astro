@@ -123,7 +123,11 @@ import { person } from '../data/profile';
 
     const only = $<HTMLInputElement>('[data-only-notes]').checked;
     const shown = only ? notes : answers;
-    $('[data-empty]').hidden = shown.length > 0;
+    const empty = $('[data-empty]');
+    empty.hidden = shown.length > 0;
+    empty.textContent = only && answers.length
+      ? 'None of the answers has a note yet.'
+      : 'No answers yet. They arrive after someone finishes a game and answers the card.';
     $('[data-answers]').replaceChildren(
       ...shown.map((a) => {
         const li = document.createElement('li');
