@@ -19,6 +19,8 @@
   --term-pass: #5fd09a;
   /* Edge on dark panels (none in light mode) and the paper behind test reports. */
   --edge: transparent;
+  /* Panels for QA projects (no client brand colour): ink in light mode, a test-pass green in dark. */
+  --qa-panel: #151513;
   --report-paper: #e9e8e1;
 
   --sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, sans-serif;
@@ -46,6 +48,7 @@
     --pass-tint: #173324;
     --term: #0b0b0a;
     --edge: rgb(255 255 255 / 0.14);
+    --qa-panel: #2b6e4f;
     --report-paper: #cfcdc3;
   }
 }
@@ -62,6 +65,7 @@
   --pass-tint: #173324;
   --term: #0b0b0a;
   --edge: rgb(255 255 255 / 0.14);
+  --qa-panel: #2b6e4f;
   --report-paper: #cfcdc3;
   color-scheme: dark;
 }

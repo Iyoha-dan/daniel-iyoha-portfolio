@@ -91,8 +91,8 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
           <a class="btn btn-solid" href="#work">See my work <span aria-hidden="true">↓</span></a>
           {
             person.cv ? (
-              <a class="btn btn-ghost" href={person.cv} download>
-                Download CV
+              <a class="btn btn-ghost" href="/cv">
+                View CV
               </a>
             ) : (
               <a class="btn btn-ghost" href={`mailto:${person.email}`}>
@@ -305,7 +305,7 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
           <li><a href={person.linkedin} {...external}>LinkedIn ↗</a></li>
           <li><a href={person.github} {...external}>GitHub ↗</a></li>
           <li><a href={person.x} {...external}>X ↗</a></li>
-          {person.cv && <li><a href={person.cv} download>Download CV ↓</a></li>}
+          {person.cv && <li><a href="/cv">View CV →</a></li>}
         </ul>
       </div>
     </section>

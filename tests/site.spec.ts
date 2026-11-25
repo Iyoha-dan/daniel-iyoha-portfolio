@@ -88,7 +88,7 @@ test.describe('hiring menu', () => {
       expect(hrefs).toEqual(route.picks.map((p) => expectedHref(p.slug)));
       for (const href of hrefs) if (!href!.startsWith('#')) expect((await page.request.get(href!)).ok()).toBe(true);
       const primary = shown.locator('.hire-actions a.solid');
-      if (route.primary === 'cv') await expect(primary).toHaveAttribute('href', '/Daniel_Iyoha_CV.pdf');
+      if (route.primary === 'cv') await expect(primary).toHaveAttribute('href', '/cv');
       else await expect(primary).toHaveAttribute('href', /wa\.me\/.*website/);
     }
   });
@@ -143,9 +143,15 @@ test.describe('links', () => {
     );
   });
 
-  test('CV download serves a PDF', async ({ page, request }) => {
-    const href = await page.getByRole('link', { name: 'Download CV' }).first().getAttribute('href');
-    const response = await request.get(href!);
+  test('every CV button leads to the CV page, which offers the PDF', async ({ page, request }) => {
+    // Hero, contact section and the contact strip all read "View CV" and open /cv.
+    const buttons = page.getByRole('link', { name: /^View CV/ });
+    expect(await buttons.count()).toBeGreaterThanOrEqual(2);
+    for (const b of await buttons.all()) await expect(b).toHaveAttribute('href', '/cv');
+    await page.goto('/cv');
+    const download = page.getByRole('link', { name: /Download PDF/ });
+    await expect(download).toHaveAttribute('download', '');
+    const response = await request.get((await download.getAttribute('href'))!);
     expect(response.ok()).toBe(true);
     expect(response.headers()['content-type']).toContain('application/pdf');
   });
@@ -419,6 +425,50 @@ test.describe('missing pages', () => {
     await expect(page.locator('[data-path]')).toHaveText('/no-such-page');
     await expect(page.getByRole('link', { name: 'See my work' })).toHaveAttribute('href', '/#work');
     await expect(page.getByRole('navigation', { name: 'Projects' }).getByRole('link')).toHaveCount(projects.length);
+  });
+});
+
+test.describe('cv page', () => {
+  test('draws the CV and keeps its text selectable', async ({ page }) => {
+    await page.goto('/cv');
+    const sheets = page.locator('[data-cv-sheets]');
+    await expect(sheets).toHaveAttribute('data-state', 'ready', { timeout: 15_000 });
+    const sheet = sheets.locator('.sheet').first();
+    await expect(sheet).toBeVisible();
+    // The loading placeholder goes away once the CV is drawn.
+    await expect(sheets.locator('[data-cv-placeholder]')).toBeHidden();
+    // The canvas has real ink on it, not a blank page.
+    const inked = await sheet.locator('canvas').evaluate((c: HTMLCanvasElement) => {
+      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+      let dark = 0;
+      for (let i = 0; i < d.length; i += 16) if (d[i] < 128) dark++;
+      return dark;
+    });
+    expect(inked).toBeGreaterThan(500);
+    await expect(sheet.locator('.textLayer')).toContainText('Daniel');
+  });
+
+  test('fits a 360px phone without sideways scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto('/cv');
+    await expect(page.locator('[data-cv-sheets]')).toHaveAttribute('data-state', 'ready', { timeout: 15_000 });
+    const box = (await page.locator('.sheet').first().boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(360);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe('dark theme', () => {
+  test('QA project panels stand out from the dark page', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.reload();
+    for (const p of projects.filter((q) => !q.accent)) {
+      const i = projects.indexOf(p);
+      const bg = await page.locator('[data-work-list] [data-tile]').nth(i).evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(bg).toBe('rgb(43, 110, 79)');
+    }
   });
 });
 

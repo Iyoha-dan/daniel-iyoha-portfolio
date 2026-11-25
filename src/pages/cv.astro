@@ -1,0 +1,253 @@
+---
+// Read the CV before downloading it. pdf.js draws the real PDF (public/Daniel_Iyoha_CV.pdf), so
+// this page can never drift from the file, and it works on phones too (Android Chrome can't show a
+// PDF inside a page). The text layer keeps the words selectable.
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import ContactStrip from '../components/ContactStrip.astro';
+import { person } from '../data/profile';
+
+// While person.cv is null the buttons that lead here are hidden; the page then points at nothing useful.
+const cv = person.cv ?? '/';
+---
+
+<Base title={`CV · ${person.name}`} description={`${person.name}'s CV: ${person.role}, ${person.location}. Read it here or download the PDF.`}>
+  <SiteHeader />
+
+  <main id="main" class="wrap cv">
+    <header class="cv-head">
+      <a class="back" href="/"><span aria-hidden="true">←</span> Home</a>
+      <p class="label">CV</p>
+      <h1>{person.name}</h1>
+      <p class="lede">{person.role}, {person.location}. One page: read it here, or download the PDF.</p>
+      <div class="cv-actions">
+        <a class="btn btn-solid" href={cv} download>Download PDF <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-ghost" href={cv} target="_blank" rel="noopener noreferrer">Open the PDF <span aria-hidden="true">↗</span></a>
+      </div>
+    </header>
+
+    <div class="desk">
+      <div class="sheets" data-cv-sheets data-src={cv} data-state="loading" aria-busy="true">
+        <div class="placeholder" data-cv-placeholder>
+          <p data-cv-message>Loading the CV…</p>
+        </div>
+        <noscript>
+          <p class="noscript">The preview needs JavaScript. <a href={cv}>Open the PDF</a> instead.</p>
+        </noscript>
+      </div>
+    </div>
+  </main>
+
+  <ContactStrip />
+  <SiteFooter />
+</Base>
+
+<script>
+  import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
+  import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+  GlobalWorkerOptions.workerSrc = workerUrl;
+
+  const host = document.querySelector<HTMLElement>('[data-cv-sheets]');
+  if (host) {
+    const message = host.querySelector<HTMLElement>('[data-cv-message]')!;
+    const placeholder = host.querySelector<HTMLElement>('[data-cv-placeholder]')!;
+    const fail = () => {
+      host.dataset.state = 'error';
+      host.removeAttribute('aria-busy');
+      message.innerHTML = '';
+      message.append("The CV couldn't be shown here. ");
+      const a = document.createElement('a');
+      a.href = host.dataset.src!;
+      a.textContent = 'Open the PDF instead.';
+      message.append(a);
+    };
+
+    const draw = async () => {
+      const pdf = await getDocument(host.dataset.src!).promise;
+      let lastWidth = 0;
+      const pages = await Promise.all(Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)));
+
+      // Draw every page at the width the sheet has now, sharp on high-density screens.
+      const render = async () => {
+        const width = Math.min(host.clientWidth, 860);
+        if (!width || Math.abs(width - lastWidth) < 2) return;
+        lastWidth = width;
+        const sheets: HTMLElement[] = [];
+        for (const page of pages) {
+          const base = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: width / base.width });
+          const ratio = window.devicePixelRatio || 1;
+          const sheet = document.createElement('div');
+          sheet.className = 'sheet';
+          sheet.style.setProperty('--scale-factor', String(viewport.scale));
+          sheet.style.width = `${viewport.width}px`;
+          sheet.style.height = `${viewport.height}px`;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.floor(viewport.width * ratio);
+          canvas.height = Math.floor(viewport.height * ratio);
+          canvas.setAttribute('aria-hidden', 'true');
+          sheet.append(canvas);
+          await page.render({ canvasContext: canvas.getContext('2d')!, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined }).promise;
+          const text = document.createElement('div');
+          text.className = 'textLayer';
+          sheet.append(text);
+          await new TextLayer({ textContentSource: page.streamTextContent(), container: text, viewport }).render();
+          sheets.push(sheet);
+        }
+        host.querySelectorAll('.sheet').forEach((s) => s.remove());
+        placeholder.hidden = true;
+        host.append(...sheets);
+        host.dataset.state = 'ready';
+        host.removeAttribute('aria-busy');
+      };
+
+      await render();
+      let timer: number | undefined;
+      new ResizeObserver(() => {
+        clearTimeout(timer);
+        timer = window.setTimeout(() => render().catch(fail), 150);
+      }).observe(host);
+    };
+    draw().catch(fail);
+  }
+</script>
+
+<style>
+  .cv {
+    padding-block: clamp(28px, 5vw, 64px) clamp(48px, 7vw, 96px);
+  }
+  .back {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    min-height: 44px;
+    margin-bottom: clamp(12px, 2vw, 24px);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--ink-2);
+    text-decoration: none;
+  }
+  @media (hover: hover) {
+    .back:hover {
+      color: var(--ink);
+    }
+  }
+  h1 {
+    margin-top: 10px;
+    font-size: clamp(2.2rem, 1.4rem + 3.6vw, 3.8rem);
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: -0.035em;
+  }
+  .lede {
+    margin-top: 16px;
+    max-width: 56ch;
+    font-size: clamp(1.05rem, 1rem + 0.3vw, 1.2rem);
+    color: var(--ink-2);
+  }
+  .cv-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  /* The CV sits on the page like paper on a desk; it stays white in both themes. */
+  .desk {
+    margin-top: clamp(24px, 4vw, 40px);
+    padding: clamp(12px, 4vw, 48px);
+    border-radius: 20px;
+    background: var(--paper-2);
+  }
+  .sheets {
+    display: grid;
+    justify-items: center;
+    gap: 24px;
+    max-width: 860px;
+    margin-inline: auto;
+  }
+  .placeholder {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    aspect-ratio: 210 / 297;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 30px 60px -30px rgb(20 20 18 / 0.35);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: #66655c;
+    text-align: center;
+    padding: 24px;
+  }
+  .placeholder[hidden] {
+    display: none;
+  }
+  .placeholder :global(a) {
+    color: #151513;
+    text-underline-offset: 3px;
+  }
+  .noscript {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+  }
+  .sheets :global(.sheet) {
+    position: relative;
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 30px 60px -30px rgb(20 20 18 / 0.35);
+  }
+  .sheets :global(.sheet canvas) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* pdf.js text layer (from pdfjs-dist/web/pdf_viewer.css): invisible, selectable text over the drawing. */
+  .sheets :global(.textLayer) {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    line-height: 1;
+    text-align: initial;
+    text-size-adjust: none;
+    -webkit-text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    z-index: 0;
+  }
+  .sheets :global(.textLayer :is(span, br)) {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+  }
+  .sheets :global(.textLayer > :not(.markedContent)),
+  .sheets :global(.textLayer .markedContent span:not(.markedContent)) {
+    z-index: 1;
+  }
+  .sheets :global(.textLayer span.markedContent) {
+    top: 0;
+    height: 0;
+  }
+  .sheets :global(.textLayer ::selection) {
+    background: rgb(21 116 74 / 0.25);
+  }
+  .sheets :global(.textLayer br::selection) {
+    background: transparent;
+  }
+  .sheets :global(.textLayer .endOfContent) {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    user-select: none;
+  }
+</style>
