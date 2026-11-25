@@ -4,6 +4,7 @@
 // as a miss, like real testing. The total bug is one Daniel logged for real on Linkhut (MKT-002).
 // When a game ends it fires "bughunt:over", which brings up the site feedback card.
 import Feedback from './Feedback.astro';
+import BugBlaster from './BugBlaster.astro';
 
 type Spot = { id: string; bug?: { title: string; why: string } };
 const bugs: Record<string, Spot['bug']> = {
@@ -48,6 +49,10 @@ const bugCount = Object.keys(bugs).length;
     </div>
 
     <Feedback />
+  </div>
+
+  <div class="hunt-arcade">
+    <BugBlaster />
   </div>
 
   <div class="device" aria-label="A checkout page to test" role="group">
@@ -237,8 +242,9 @@ const bugCount = Object.keys(bugs).length;
     grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
     grid-template-areas:
       'intro device'
+      'arcade device'
       'results device';
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     gap: 0 clamp(32px, 5vw, 72px);
     align-items: start;
     padding-block: clamp(56px, 7vw, 96px);
@@ -354,6 +360,9 @@ const bugCount = Object.keys(bugs).length;
   }
   .hunt-results {
     grid-area: results;
+  }
+  .hunt-arcade {
+    grid-area: arcade;
   }
   .device {
     grid-area: device;
@@ -554,7 +563,8 @@ const bugCount = Object.keys(bugs).length;
       grid-template-areas:
         'intro'
         'device'
-        'results';
+        'results'
+        'arcade';
       gap: 20px;
     }
   }

@@ -423,12 +423,67 @@ test.describe('bug hunt', () => {
   });
 
   test('when time runs out, the missed bugs are shown', async ({ page }) => {
+    // Reduced motion keeps the arcade's demo still, so fast-forwarding a minute doesn't draw 3,600 frames.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.clock.install();
     await page.goto('/');
     await spot(page, 'phone').click();
     await page.clock.runFor(61_000);
     await expect(page.locator('#bug-hunt .found-list li.is-missed')).toHaveCount(4);
     await expect(page.locator('#bug-hunt [data-end-line]')).toContainText('1 of 5');
+  });
+});
+
+test.describe('bug blaster', () => {
+  const game = (page) => page.locator('[data-blaster-dialog]');
+  const play = (page) => page.locator('[data-blaster]').getByRole('button', { name: 'Play' });
+
+  test('opens from the mini player, scores, and closes back to the button', async ({ page }) => {
+    await play(page).click();
+    await expect(page.getByRole('dialog', { name: 'Bug blaster' })).toBeVisible();
+    await expect(game(page)).toHaveAttribute('data-state', 'ready');
+    await page.keyboard.press('Space');
+    await expect(game(page)).toHaveAttribute('data-state', 'play');
+    // Sprint 1 sends its bugs straight down the middle, so holding fire from the start scores.
+    await page.keyboard.down('Space');
+    await expect(game(page)).not.toHaveAttribute('data-score', '0', { timeout: 10_000 });
+    await page.keyboard.up('Space');
+    await page.keyboard.press('Escape');
+    await expect(game(page)).toBeHidden();
+    await expect(play(page)).toBeFocused();
+  });
+
+  test('P pauses and Space carries on', async ({ page }) => {
+    await play(page).click();
+    await page.keyboard.press('Space');
+    await page.keyboard.press('KeyP');
+    await expect(game(page)).toHaveAttribute('data-state', 'paused');
+    await page.keyboard.press('Space');
+    await expect(game(page)).toHaveAttribute('data-state', 'play');
+  });
+
+  test('sound stays off until turned on, and is remembered', async ({ page }) => {
+    await play(page).click();
+    const sound = game(page).getByRole('button', { name: /Sound/ });
+    await expect(sound).toHaveAttribute('aria-pressed', 'false');
+    await sound.click();
+    await expect(sound).toHaveAttribute('aria-pressed', 'true');
+    await page.reload();
+    await play(page).click();
+    await expect(game(page).getByRole('button', { name: /Sound/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('on a phone it fills the screen and a tap starts it', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await play(page).click();
+    const canvas = game(page).locator('canvas');
+    for (const el of [game(page), canvas, game(page).getByRole('button', { name: 'Close the game' })]) {
+      const box = (await el.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(360);
+    }
+    await canvas.click();
+    await expect(game(page)).toHaveAttribute('data-state', 'play');
   });
 });
 
