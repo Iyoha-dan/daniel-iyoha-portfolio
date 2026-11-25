@@ -126,6 +126,13 @@ test.describe('links', () => {
     }
   });
 
+  test('the footer links to this suite on GitHub', async ({ page }) => {
+    await expect(page.locator('.foot').getByRole('link', { name: /read the tests/ })).toHaveAttribute(
+      'href',
+      'https://github.com/Iyoha-dan/daniel-iyoha-portfolio/blob/main/tests/site.spec.ts',
+    );
+  });
+
   test('CV download serves a PDF', async ({ page, request }) => {
     const href = await page.getByRole('link', { name: 'Download CV' }).first().getAttribute('href');
     const response = await request.get(href!);

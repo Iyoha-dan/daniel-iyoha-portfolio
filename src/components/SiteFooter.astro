@@ -5,7 +5,10 @@ import { person } from '../data/profile';
 <footer class="foot">
   <div class="wrap foot-inner">
     <p>© {new Date().getFullYear()} {person.name}</p>
-    <p>Built with Astro. Tested with Playwright.</p>
+    <p>
+      Built with Astro. Tested with Playwright:
+      <a href={`${person.repo}/blob/main/tests/site.spec.ts`} target="_blank" rel="noopener noreferrer">read the tests ↗</a>
+    </p>
   </div>
 </footer>
 
@@ -24,5 +27,12 @@ import { person } from '../data/profile';
     padding-block: 22px;
     /* Rule drawn inside the gutters so it lines up with the content above. */
     background: linear-gradient(rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.08)) center top / calc(100% - 2 * var(--gutter)) 1px no-repeat;
+  }
+  .foot a {
+    display: inline-block;
+    padding-block: 12px;
+    margin-block: -12px;
+    color: var(--term-text);
+    text-underline-offset: 3px;
   }
 </style>

@@ -186,7 +186,10 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
               </p>
             </div>
             </details>
-            <figcaption>This site's own Playwright suite. The panel is built from the latest real run.</figcaption>
+            <figcaption>
+              This site's own Playwright suite. The panel is built from the latest real run.
+              <a href={`${person.repo}/blob/main/tests/site.spec.ts`} {...external}>Read the tests ↗</a>
+            </figcaption>
           </figure>
         )
       }
@@ -594,6 +597,11 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
     color: var(--term-dim);
     font-size: 0.72rem;
     line-height: 1.5;
+  }
+  .term figcaption a {
+    color: var(--term-text);
+    text-underline-offset: 3px;
+    white-space: nowrap;
   }
   @media (prefers-reduced-motion: no-preference) {
     .term-body li,

@@ -8,6 +8,8 @@ export const person = {
   linkedin: 'https://www.linkedin.com/in/daniel-iyoha-574b53313',
   github: 'https://github.com/Iyoha-dan',
   x: 'https://x.com/DanielIyoha9',
+  // This site's code; the test panel and footer link to its Playwright suite.
+  repo: 'https://github.com/Iyoha-dan/daniel-iyoha-portfolio',
   // Opens a WhatsApp chat with a message already started (same number as on the CV).
   whatsapp: `https://wa.me/2349030851695?text=${encodeURIComponent('Hi Daniel, I saw your portfolio and ')}`,
   // The same chat, started as a website enquiry (small-business page and the "Hiring?" menu).
