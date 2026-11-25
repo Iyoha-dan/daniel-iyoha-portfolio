@@ -1,7 +1,13 @@
 ---
-// The homepage's Work section. Desktop: the list beside one preview card that crossfades to the
-// hovered or focused project. Phones: just the list, with a thumbnail per project.
-// Every row (and the preview) opens the project's case study page.
+// The homepage's Work section: one list of project links, laid out two ways.
+// Desktop (>960px): expanding panels. All five sit side by side in their brand colours; pointing
+//   at or tabbing to one widens it into the full card. The first tap on a touch screen opens a
+//   panel, the next follows the link.
+// Phones and tablets: a scroll-snap carousel. The phone's own swiping, one big card in focus,
+//   the next one peeking in, plus dots and a "1 / 5" count.
+// Either way the card in focus replays its checks (Lighthouse scores, release flows, the Linkhut
+// run), ending on the real figures from profile.ts. Prototypes compared in the "Work preview
+// options" artifact (Nov 2026).
 import { Image } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 import type { Project } from '../data/profile';
@@ -25,141 +31,131 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
   <div class="section-head" data-reveal>
     <h2 id="work-title">Work</h2>
     <p class="section-lede">
-      What I've built and tested. Each opens its case study<span class="hint-desk">; hover one to preview it</span>.
+      What I've built and tested. <span class="hint-desk">Point at a project to open it up; click it for the case study.</span><span class="hint-touch">Swipe through, and tap one for its case study.</span>
     </p>
   </div>
 
-  <div class="index-layout">
-    <ol class="index-list" data-index-list>
-      {
-        projects.map((p, i) => (
-          <li>
-            <a href={href(p)} data-index={i}>
-              <span class="row-thumb" aria-hidden="true" style={p.accent ? `--accent:${p.accent}` : undefined}>
-                {shot(p) ? (
-                  <Image src={shot(p)!} alt="" widths={[96, 192]} sizes="64px" />
-                ) : (
-                  <svg viewBox="0 0 24 24">
-                    <path d="M5 12.5l4.5 4.5L19 7.5" />
-                  </svg>
-                )}
-              </span>
-              <span class="row-main">
-                <span class="row-title">{p.title}</span>
-                <span class="row-kind">{p.kind}</span>
-              </span>
-              {p.stat && <span class="row-proof">{p.stat}</span>}
-            </a>
-          </li>
-        ))
-      }
-    </ol>
-
-    <div class="stack" data-stack>
-      {
-        projects.map((p, i) => {
-          const img = shot(p);
-          return (
+  <ol class="track" data-work-list>
+    {
+      projects.map((p, i) => {
+        const img = shot(p);
+        return (
+          <li data-index={i}>
             <a
-              class:list={['card', p.group === 'qa' ? 'card-qa' : 'card-web']}
+              class="tile"
               href={href(p)}
-              data-card={i}
+              data-tile
+              aria-label={`${p.title}. ${p.kind}${p.stat ? `. ${p.stat}` : ''}`}
               style={p.accent ? `--accent:${p.accent}` : undefined}
             >
-              <span class="card-top">
-                {img ? (
-                  <>
-                    <Image src={img} alt="" widths={[360, 720]} sizes="(min-width: 961px) 480px, 1px" class="card-shot" />
-                    {p.scores && (
-                      <span class="lh" aria-hidden="true">
-                        <span class="lh-cmd">$ lighthouse {p.link?.label ?? p.title}</span>
-                        {p.scores.values.map((s, k) => (
-                          <span class="lh-row step" style={`--i:${k}`}>
-                            <span class="mark" style={`--done:${k * 140 + 640}ms`}>
-                              <span class="pend">·</span>
-                              <span class="tick">✓</span>
-                            </span>
-                            <span class="lh-label">{s.label}</span>
-                            <span class="lh-score" data-count={s.value} data-at={k * 140 + 150} data-for="520">
-                              {s.value}
-                            </span>
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span class="report" aria-hidden="true">
-                    <span class="report-title">{p.results ? 'Test report' : 'Release checklist'}</span>
-                    {p.results ? (
-                      <>
-                        <span class="report-line">
-                          {p.results.label}:{' '}
-                          <span data-count={p.results.passed + p.results.failed} data-at="150" data-for="900">
-                            {p.results.passed + p.results.failed}
-                          </span>{' '}
-                          test cases
-                        </span>
-                        <span class="bar fill" style={`grid-template-columns:${p.results.passed}fr ${p.results.failed}fr`}>
-                          <span class="bar-pass" />
-                          <span class="bar-fail" />
-                        </span>
-                        <span class="report-line legend step" style="--at:1050ms">
-                          <span class="pass">{p.results.passed} passed</span>
-                          <span class="fail">{p.results.failed} failed</span>
-                        </span>
-                        {p.bugs?.map((b, k) => (
-                          <span class="report-line bug step" style={`--at:${1250 + k * 180}ms`}>
-                            <span>
-                              <span class="bug-id">{b.id}</span> · {b.severity}
-                            </span>
-                            <span>{b.title}</span>
-                          </span>
-                        ))}
-                      </>
-                    ) : (
-                      <>
-                        {(p.checks ?? []).map((c, k) => (
-                          <span class="report-line step" style={`--i:${k}`}>
-                            <span class="mark" style={`--done:${k * 140 + 360}ms`}>
-                              <span class="pend">·</span>
-                              <span class="tick">✓</span>
-                            </span>
-                            {c}
-                          </span>
-                        ))}
-                        <span class="report-line summary step" style={`--at:${(p.checks?.length ?? 0) * 140 + 450}ms`}>
-                          {p.checks?.length}/{p.checks?.length} {(p.checksLabel ?? 'checks').toLowerCase()}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                )}
+              <span class="tile-label" aria-hidden="true">
+                <span class="tile-title">{p.title}</span>
+                <span class="tile-num">0{i + 1}</span>
               </span>
-              <span class="card-body">
-                <span class="card-kind">{p.kind}</span>
-                <span class="card-title">{p.title}</span>
-                {p.stat && <span class="card-stat">{p.stat}</span>}
+              <span class="card" data-card={i}>
+                <span class="card-top">
+                  {img ? (
+                    <>
+                      <Image src={img} alt="" widths={[480, 720, 1080]} sizes="(min-width: 961px) 640px, 82vw" class="card-shot" />
+                      {p.scores && (
+                        <span class="lh" aria-hidden="true">
+                          <span class="lh-cmd">$ lighthouse {p.link?.label ?? p.title}</span>
+                          {p.scores.values.map((s, k) => (
+                            <span class="lh-row step" style={`--i:${k}`}>
+                              <span class="mark" style={`--done:${k * 140 + 640}ms`}>
+                                <span class="pend">·</span>
+                                <span class="tick">✓</span>
+                              </span>
+                              <span class="lh-label">{s.label}</span>
+                              <span class="lh-score" data-count={s.value} data-at={k * 140 + 150} data-for="520">
+                                {s.value}
+                              </span>
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span class="report" aria-hidden="true">
+                      <span class="report-title">{p.results ? 'Test report' : 'Release checklist'}</span>
+                      {p.results ? (
+                        <>
+                          <span class="report-line">
+                            {p.results.label}:{' '}
+                            <span data-count={p.results.passed + p.results.failed} data-at="150" data-for="900">
+                              {p.results.passed + p.results.failed}
+                            </span>{' '}
+                            test cases
+                          </span>
+                          <span class="bar fill" style={`grid-template-columns:${p.results.passed}fr ${p.results.failed}fr`}>
+                            <span class="bar-pass" />
+                            <span class="bar-fail" />
+                          </span>
+                          <span class="report-line legend step" style="--at:1050ms">
+                            <span class="pass">{p.results.passed} passed</span>
+                            <span class="fail">{p.results.failed} failed</span>
+                          </span>
+                          {p.bugs?.map((b, k) => (
+                            <span class="report-line bug step" style={`--at:${1250 + k * 180}ms`}>
+                              <span>
+                                <span class="bug-id">{b.id}</span> · {b.severity}
+                              </span>
+                              <span>{b.title}</span>
+                            </span>
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          {(p.checks ?? []).map((c, k) => (
+                            <span class="report-line step" style={`--i:${k}`}>
+                              <span class="mark" style={`--done:${k * 140 + 360}ms`}>
+                                <span class="pend">·</span>
+                                <span class="tick">✓</span>
+                              </span>
+                              {c}
+                            </span>
+                          ))}
+                          <span class="report-line summary step" style={`--at:${(p.checks?.length ?? 0) * 140 + 450}ms`}>
+                            {p.checks?.length}/{p.checks?.length} {(p.checksLabel ?? 'checks').toLowerCase()}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </span>
+                <span class="card-body">
+                  <span class="card-kind">{p.kind}</span>
+                  <span class="card-title">{p.title}</span>
+                  {p.stat && <span class="card-stat">{p.stat}</span>}
+                </span>
               </span>
             </a>
-          );
-        })
-      }
+          </li>
+        );
+      })
+    }
+  </ol>
+
+  <div class="track-ctrl" data-track-ctrl>
+    <span class="track-count" data-track-count aria-hidden="true">1 / {projects.length}</span>
+    <div class="dots">
+      {projects.map((p, i) => <button type="button" data-dot={i} aria-label={`Show ${p.title}`} aria-current={i === 0 ? 'true' : 'false'} />)}
     </div>
   </div>
 </section>
 
 <script>
-  const list = document.querySelector<HTMLElement>('[data-index-list]');
-  const stack = document.querySelector<HTMLElement>('[data-stack]');
-  if (list && stack) {
-    const rows = [...list.querySelectorAll<HTMLAnchorElement>('a[data-index]')];
-    const cards = [...stack.querySelectorAll<HTMLAnchorElement>('[data-card]')];
-
-    // Each card replays its checks when it comes up: rows step in and tick (CSS, under
-    // .is-running), and numbers count up to the real result (below). Reduced motion skips the
-    // replay; the markup already holds the final results.
+  const list = document.querySelector<HTMLElement>('[data-work-list]');
+  if (list) {
+    const items = [...list.querySelectorAll<HTMLElement>('li[data-index]')];
+    const tiles = items.map((li) => li.querySelector<HTMLAnchorElement>('[data-tile]')!);
+    const cards = items.map((li) => li.querySelector<HTMLElement>('[data-card]')!);
+    const dots = [...document.querySelectorAll<HTMLButtonElement>('[data-dot]')];
+    const count = document.querySelector<HTMLElement>('[data-track-count]')!;
+    const desk = matchMedia('(min-width: 961px)');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+    /* The check replay: rows step in and tick (CSS, under .is-running), numbers count up. */
     const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
     let runId = 0;
     const run = (card: HTMLElement) => {
@@ -172,12 +168,11 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       const start = performance.now();
       counters.forEach((el) => (el.textContent = '0'));
       const tick = (now: number) => {
-        if (id !== runId) return; // another card took over
+        if (id !== runId) return counters.forEach((el) => (el.textContent = el.dataset.count!)); // another card took over
         let busy = false;
         for (const el of counters) {
-          const target = Number(el.dataset.count);
           const t = Math.min(Math.max((now - start - Number(el.dataset.at)) / Number(el.dataset.for), 0), 1);
-          el.textContent = String(Math.round(target * easeOut(t)));
+          el.textContent = String(Math.round(Number(el.dataset.count) * easeOut(t)));
           if (t < 1) busy = true;
         }
         if (busy) requestAnimationFrame(tick);
@@ -185,40 +180,100 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       requestAnimationFrame(tick);
     };
 
-    // Runs start once the preview is on screen, so the first card isn't over before anyone sees it.
+    // Replays start once the section is on screen, so the first one isn't over before anyone sees it.
     let seen = false;
     let current = -1;
-    const show = (index: number) => {
-      if (index === current) return;
-      current = index;
-      rows.forEach((row, i) => row.classList.toggle('is-active', i === index));
-      cards.forEach((card, i) => card.toggleAttribute('data-active', i === index));
-      if (seen) run(cards[index]);
+    const activate = (i: number) => {
+      if (i === current) return;
+      current = i;
+      items.forEach((li, j) => li.toggleAttribute('data-active', j === i));
+      dots.forEach((d, j) => d.setAttribute('aria-current', String(j === i)));
+      count.textContent = `${i + 1} / ${items.length}`;
+      if (seen) run(cards[i]);
     };
-    new IntersectionObserver((entries, observer) => {
-      if (!entries.some((e) => e.isIntersecting)) return;
-      seen = true;
-      run(cards[current]);
-      observer.disconnect();
-    }, { threshold: 0.4 }).observe(stack);
+    new IntersectionObserver(
+      (entries, observer) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        seen = true;
+        run(cards[Math.max(current, 0)]);
+        observer.disconnect();
+      },
+      { threshold: 0.35 },
+    ).observe(list);
 
-    // Only switch once the pointer settles on a row: on the way across to the preview it passes
-    // over other rows, and switching on every one would swap the card out from under the click.
+    /* Desktop: panels open on hover (after a short pause, so sweeping across doesn't flicker) or focus. */
     let pending: number | undefined;
-    rows.forEach((row, i) => {
-      row.addEventListener('pointerenter', () => {
+    tiles.forEach((tile, i) => {
+      tile.addEventListener('pointerenter', (e) => {
+        if (!desk.matches || e.pointerType !== 'mouse') return;
         clearTimeout(pending);
-        pending = window.setTimeout(() => show(i), 90);
+        pending = window.setTimeout(() => activate(i), 120);
       });
-      row.addEventListener('pointerleave', () => clearTimeout(pending));
-      row.addEventListener('focus', () => show(i));
+      tile.addEventListener('pointerleave', () => clearTimeout(pending));
+      tile.addEventListener('focus', () => {
+        if (desk.matches) activate(i);
+      });
+      // A touch screen at desktop width has no hover: the first tap opens the panel, the next follows the link.
+      tile.addEventListener('click', (e) => {
+        if (desk.matches && current !== i) {
+          e.preventDefault();
+          activate(i);
+        }
+      });
     });
-    // The list carries the same links, so screen readers and Tab skip the preview; the mouse can still click it.
-    cards.forEach((card) => {
-      card.setAttribute('aria-hidden', 'true');
-      card.tabIndex = -1;
-    });
-    show(0);
+
+    /* Phones: the card nearest the middle is in focus; the others shrink and fade a little. */
+    const paint = () => {
+      const box = list.getBoundingClientRect();
+      const mid = box.left + box.width / 2;
+      let best = 0;
+      let bestD = Infinity;
+      cards.forEach((card, i) => {
+        const r = items[i].getBoundingClientRect();
+        const d = Math.abs(r.left + r.width / 2 - mid) / r.width;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+        const k = Math.min(d, 1);
+        card.style.transform = reduced.matches ? '' : `scale(${1 - k * 0.08})`;
+        card.style.opacity = String(1 - k * 0.4);
+      });
+      return best;
+    };
+    let settle: number | undefined;
+    list.addEventListener(
+      'scroll',
+      () => {
+        if (desk.matches) return;
+        requestAnimationFrame(paint);
+        clearTimeout(settle);
+        settle = window.setTimeout(() => activate(paint()), 90);
+      },
+      { passive: true },
+    );
+    dots.forEach((dot, i) =>
+      dot.addEventListener('click', () => {
+        const item = items[i].getBoundingClientRect();
+        const box = list.getBoundingClientRect();
+        const left = list.scrollLeft + (item.left - box.left) - (box.width - item.width) / 2;
+        list.scrollTo({ left, behavior: reduced.matches ? 'auto' : 'smooth' });
+      }),
+    );
+    // Keyboard on a phone layout: a focused card scrolls itself to the middle.
+    tiles.forEach((tile, i) =>
+      tile.addEventListener('focus', () => {
+        if (!desk.matches) dots[i].click();
+      }),
+    );
+
+    const layout = () => {
+      if (desk.matches) cards.forEach((c) => ((c.style.transform = ''), (c.style.opacity = '')));
+      else paint();
+    };
+    desk.addEventListener('change', layout);
+    activate(0);
+    layout();
   }
 </script>
 
@@ -238,104 +293,36 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     font-size: clamp(1rem, 0.96rem + 0.25vw, 1.15rem);
     color: var(--ink-2);
   }
-
-  .index-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    gap: clamp(32px, 5vw, 72px);
-    align-items: center;
-    margin-top: clamp(28px, 4vw, 48px);
-  }
-
-  /* The list */
-  .index-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    border-top: 1px solid var(--line);
-  }
   .anchor {
     position: absolute;
   }
-  .index-list a {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 16px;
-    padding: 18px 14px;
-    margin-inline: -14px;
-    border-radius: 10px;
-    text-decoration: none;
-    transition:
-      background-color 150ms ease,
-      color 150ms ease;
+  .track {
+    margin: clamp(28px, 4vw, 48px) 0 0;
+    padding: 0;
+    list-style: none;
   }
-  .index-list li {
-    border-bottom: 1px solid var(--line);
-  }
-  .row-title {
-    font-size: clamp(1.15rem, 1rem + 0.5vw, 1.4rem);
-    font-weight: 650;
-    letter-spacing: -0.015em;
-  }
-  .row-main {
-    display: grid;
-    gap: 2px;
-  }
-  .row-kind {
-    color: var(--ink-3);
-    font-size: 0.92rem;
-  }
-  .row-proof {
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--pass);
-    white-space: nowrap;
-  }
-  .row-thumb {
-    display: none;
-  }
-  .index-list a.is-active {
-    background: var(--paper-2);
-  }
-
-  /* The preview: every card sits in the same spot; only the active one shows. */
-  .stack {
+  .tile {
     position: relative;
-    height: 460px;
-  }
-  .card {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    opacity: 0;
-    transform: translateY(10px) scale(0.985);
-    pointer-events: none;
-    transition:
-      opacity 220ms ease,
-      transform 320ms var(--ease-out);
-    overflow: hidden;
-    border-radius: 16px;
-    background: var(--card);
-    box-shadow: 0 24px 48px -28px rgb(20 20 18 / 0.4);
+    display: block;
+    height: 100%;
     color: var(--ink);
     text-decoration: none;
   }
-  .card[data-active] {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-    z-index: 1;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .card {
-      transform: none;
-      transition: opacity 120ms ease;
-    }
+
+  /* The card (same anatomy everywhere) */
+  .card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 18px;
+    background: var(--card);
+    box-shadow: 0 24px 48px -28px rgb(20 20 18 / 0.4);
   }
   .card-top {
+    position: relative;
     flex: 1;
+    min-height: 0;
     display: grid;
     place-items: center;
     padding: 18px 18px 0;
@@ -437,7 +424,6 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     padding-top: 8px;
     border-top: 1px dashed #bdb9ab;
   }
-
   .summary {
     padding-top: 8px;
     border-top: 1px dashed #bdb9ab;
@@ -446,9 +432,6 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
   }
 
   /* Website cards: a Lighthouse run over the screenshot (real mobile scores from profile.ts). */
-  .card-top {
-    position: relative;
-  }
   .lh {
     position: absolute;
     left: 18px;
@@ -491,7 +474,6 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
   }
   .pend {
     opacity: 0;
-    color: currentColor;
   }
 
   /* The replay. Without .is-running (or with reduced motion) everything shows its final state. */
@@ -545,66 +527,185 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     }
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .index-list a:hover {
-      background: var(--paper-2);
+  .track-ctrl {
+    display: none;
+  }
+  .dots {
+    display: flex;
+    gap: 2px;
+  }
+  .dots button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .dots button::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--line-strong);
+    transition:
+      width 220ms var(--ease-out),
+      background-color 220ms ease;
+  }
+  .dots button[aria-current='true']::before {
+    width: 20px;
+    background: var(--ink);
+  }
+
+  /* ---------- Desktop: expanding panels ---------- */
+  @media (min-width: 961px) {
+    .hint-touch {
+      display: none;
+    }
+    .track {
+      display: flex;
+      gap: 10px;
+      height: 460px;
+    }
+    .track li {
+      flex: 1 1 0;
+      min-width: 0;
+      transition: flex-grow 560ms var(--ease-out);
+    }
+    .track li[data-active] {
+      flex-grow: 6;
+    }
+    .tile {
+      overflow: hidden;
+      border-radius: 18px;
+      background: var(--accent, var(--term));
+    }
+    .tile:focus-visible {
+      outline: 3px solid var(--pass);
+      outline-offset: 3px;
+    }
+    .tile-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0;
+      color: #fff;
+      transition: opacity 200ms ease;
+    }
+    .tile-title {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 1.2rem;
+      font-weight: 720;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+    .tile-num {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      opacity: 0.8;
+    }
+    .track li[data-active] .tile-label {
+      opacity: 0;
+    }
+    .card {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      box-shadow: none;
+      transition: opacity 240ms ease;
+    }
+    .track li[data-active] .card {
+      opacity: 1;
+      transition-delay: 220ms;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .track li:not([data-active]) .tile:hover .tile-label {
+        background: rgb(255 255 255 / 0.08);
+      }
     }
   }
 
-  /* Phones and tablets: no list, the cards become a row you swipe through. */
-  /* Phones and tablets: just the list, each row with a thumbnail and its proof figure. */
+  /* ---------- Phones and tablets: snap carousel ---------- */
   @media (max-width: 960px) {
     .hint-desk {
       display: none;
     }
-    .index-layout {
-      display: block;
+    .track {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      overscroll-behavior-x: contain;
+      margin-inline: calc(-1 * var(--gutter));
+      padding-inline: max(var(--gutter), 9%);
+      padding-block: 4px 12px;
+      scrollbar-width: none;
     }
-    .stack {
+    .track::-webkit-scrollbar {
       display: none;
     }
-    .index-list a {
-      grid-template-columns: 64px minmax(0, 1fr);
-      grid-template-areas:
-        'thumb main'
-        'thumb proof';
-      align-items: start;
-      gap: 4px 16px;
-      padding: 14px 12px;
-      margin-inline: -12px;
+    .track li {
+      flex: 0 0 min(82%, 440px);
+      scroll-snap-align: center;
     }
-    .row-thumb {
-      grid-area: thumb;
-      display: grid;
-      place-items: center;
-      width: 64px;
-      height: 64px;
-      overflow: hidden;
-      border-radius: 12px;
-      background: var(--accent, var(--term));
+    .tile-label {
+      display: none;
     }
-    .row-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: left top;
-      transform: scale(1.15) translate(6%, 6%);
+    .card {
+      height: 440px;
+      transform-origin: center;
+      will-change: transform;
     }
-    .row-thumb svg {
-      width: 28px;
-      height: 28px;
-      fill: none;
-      stroke: var(--term-pass);
-      stroke-width: 2.4;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+    .tile:focus-visible {
+      outline: none;
     }
-    .row-main {
-      grid-area: main;
+    .tile:focus-visible .card {
+      outline: 3px solid var(--pass);
+      outline-offset: 3px;
     }
-    .row-proof {
-      grid-area: proof;
-      white-space: normal;
+    .track-ctrl {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 6px;
+    }
+    .track-count {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+  /* Narrow cards: tighter report text so the seven MoneyGuard flows fit on one line each. */
+  @media (max-width: 600px) {
+    .card-top {
+      padding: 14px 14px 0;
+    }
+    .report {
+      gap: 7px;
+      padding: 12px;
+      font-size: 0.66rem;
+      letter-spacing: -0.01em;
+    }
+    .lh {
+      left: 14px;
+      bottom: 12px;
+      font-size: 0.68rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .track li,
+    .card,
+    .tile-label {
+      transition: none !important;
     }
   }
 </style>

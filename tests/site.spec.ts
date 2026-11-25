@@ -15,11 +15,13 @@ test.describe('home', () => {
   });
 
   test('lists every project once, each with a proof figure', async ({ page }) => {
-    const rows = page.locator('[data-index-list] a');
-    await expect(rows).toHaveCount(projects.length);
+    const tiles = page.locator('[data-work-list] [data-tile]');
+    await expect(tiles).toHaveCount(projects.length);
     for (const [i, p] of projects.entries()) {
-      await expect(rows.nth(i).locator('.row-title')).toHaveText(p.title);
-      if (p.stat) await expect(rows.nth(i).locator('.row-proof')).toHaveText(p.stat);
+      await expect(tiles.nth(i).locator('.card-title')).toHaveText(p.title);
+      if (p.stat) await expect(tiles.nth(i).locator('.card-stat')).toHaveText(p.stat);
+      // Screen readers hear the title first, then the kind of work and the proof.
+      expect((await tiles.nth(i).getAttribute('aria-label'))!.startsWith(`${p.title}. `)).toBe(true);
     }
   });
 
@@ -183,44 +185,49 @@ test.describe('local time', () => {
 });
 
 test.describe('work index', () => {
-  test('lists every project and hovering one previews it', async ({ page }) => {
-    const rows = page.locator('[data-index-list] a');
-    await rows.nth(2).hover();
-    await expect(page.locator('[data-card="2"]')).toHaveAttribute('data-active', '');
-    // Each row opens its case study, or its section when there is no case study yet.
-    for (const row of await rows.all()) {
-      const href = (await row.getAttribute('href'))!;
+  const tiles = (page) => page.locator('[data-work-list] [data-tile]');
+  const item = (page, i: number) => page.locator(`[data-work-list] li[data-index="${i}"]`);
+  const desktop = async (page) => {
+    // Tall enough to show the whole Work section, so nothing scrolls under the mouse mid-test.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('#work').scrollIntoViewIfNeeded();
+  };
+
+  test('every project opens its case study', async ({ page }) => {
+    for (const tile of await tiles(page).all()) {
+      const href = (await tile.getAttribute('href'))!;
       if (href.startsWith('#')) await expect(page.locator(href)).toHaveCount(1);
       else expect((await page.request.get(href)).ok()).toBe(true);
     }
   });
 
-  test('hovering a row shows its preview, and the preview opens the page', async ({ page }) => {
-    // Tall enough to show the whole Work section, so nothing scrolls under the mouse mid-test.
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.locator('#work').scrollIntoViewIfNeeded();
-    const rows = page.locator('[data-index-list] a');
-    const preview = page.locator('[data-card][data-active]');
-    await expect(preview).toHaveAttribute('data-card', '0');
-    await rows.nth(1).hover();
-    await expect(preview).toHaveAttribute('data-card', '1');
-    // Move across to the preview like a person would; passing over other rows must not switch it.
-    const box = (await page.locator('[data-stack]').boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
-    await page.waitForTimeout(200);
-    await expect(preview).toHaveAttribute('data-card', '1');
-    const target = (await rows.nth(1).getAttribute('href'))!;
-    await page.mouse.down();
-    await page.mouse.up();
-    // The preview opens the same page as its row.
+  test('desktop: pointing at a panel opens it, and clicking the open panel opens the page', async ({ page }) => {
+    await desktop(page);
+    await expect(item(page, 0)).toHaveAttribute('data-active', '');
+    await tiles(page).nth(2).hover();
+    await expect(item(page, 2)).toHaveAttribute('data-active', '');
+    await expect(page.locator('[data-work-list] li[data-active]')).toHaveCount(1);
+    // The open panel is the wide one.
+    await expect
+      .poll(async () => (await item(page, 2).boundingBox())!.width / (await item(page, 0).boundingBox())!.width)
+      .toBeGreaterThan(3);
+    const target = (await tiles(page).nth(2).getAttribute('href'))!;
+    await tiles(page).nth(2).click();
     await expect(page).toHaveURL((url) => url.pathname === target);
   });
 
-  test('a preview runs its checks and lands on the real results', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.locator('#work').scrollIntoViewIfNeeded();
+  test('desktop: a tap on a closed panel opens it first, without leaving the page', async ({ page }) => {
+    await desktop(page);
+    // A touch screen has no hover: the click arrives on its own.
+    await tiles(page).nth(4).dispatchEvent('click');
+    await expect(item(page, 4)).toHaveAttribute('data-active', '');
+    await expect(page).toHaveURL((url) => url.pathname === '/');
+  });
+
+  test('the open card runs its checks and lands on the real results', async ({ page }) => {
+    await desktop(page);
     for (const [i, p] of projects.entries()) {
-      await page.locator('[data-index-list] a').nth(i).hover();
+      await tiles(page).nth(i).hover();
       const card = page.locator(`[data-card="${i}"]`);
       await expect(card).toHaveClass(/is-running/);
       const counters = card.locator('[data-count]');
@@ -234,32 +241,38 @@ test.describe('work index', () => {
 
   test('with reduced motion the results show at once, without a replay', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.locator('#work').scrollIntoViewIfNeeded();
+    await desktop(page);
     const i = projects.findIndex((p) => p.results);
-    await page.locator('[data-index-list] a').nth(i).hover();
+    await tiles(page).nth(i).hover();
+    await expect(item(page, i)).toHaveAttribute('data-active', '');
     const card = page.locator(`[data-card="${i}"]`);
-    await expect(card).toHaveAttribute('data-active', '');
     await expect(card).not.toHaveClass(/is-running/);
     const p = projects[i];
     await expect(card.locator('[data-count]')).toHaveText(String(p.results!.passed + p.results!.failed));
   });
 
-  test('keyboard focus moves the preview too', async ({ page }) => {
-    await page.locator('[data-index-list] a').nth(3).focus();
-    await expect(page.locator('[data-card][data-active]')).toHaveAttribute('data-card', '3');
+  test('keyboard focus opens a panel too', async ({ page }) => {
+    await desktop(page);
+    await tiles(page).nth(3).focus();
+    await expect(item(page, 3)).toHaveAttribute('data-active', '');
   });
 
-  test('phones get the whole list, each project with a thumbnail', async ({ page }) => {
+  test('phones: a swipeable carousel with dots, one card in focus', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await expect(page.locator('[data-stack]')).toBeHidden();
-    const rows = page.locator('[data-index-list] a');
-    await expect(rows).toHaveCount(projects.length);
-    for (const row of await rows.all()) {
-      await expect(row).toBeVisible();
-      await expect(row.locator('.row-thumb')).toBeVisible();
-    }
+    const list = page.locator('[data-work-list]');
+    await list.scrollIntoViewIfNeeded();
+    // The cards scroll sideways inside the section, never the page.
+    expect(await list.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+    await expect(page.locator('[data-track-count]')).toHaveText(`1 / ${projects.length}`);
+    for (const tile of await tiles(page).all()) await expect(tile.locator('.card')).toHaveCSS('height', /^4[0-9]{2}px$/);
+    await page.locator('[data-dot="3"]').click();
+    await expect(item(page, 3)).toHaveAttribute('data-active', '');
+    await expect(page.locator('[data-track-count]')).toHaveText(`4 / ${projects.length}`);
+    await expect(page.locator('[data-dot="3"]')).toHaveAttribute('aria-current', 'true');
+    const p = projects[3];
+    if (p.scores) await expect(page.locator('[data-card="3"] [data-count]')).toHaveText(p.scores.values.map((s) => String(s.value)));
   });
 });
 
@@ -342,7 +355,7 @@ test.describe('project pages', () => {
   }
 
   test('every work row opens a case study page', async ({ page }) => {
-    const hrefs = await page.locator('[data-index-list] a').evaluateAll((rows) => rows.map((r) => r.getAttribute('href')));
+    const hrefs = await page.locator('[data-work-list] [data-tile]').evaluateAll((rows) => rows.map((r) => r.getAttribute('href')));
     expect(hrefs.filter((h) => h?.startsWith('/work/'))).toHaveLength(withPages.length);
   });
 
