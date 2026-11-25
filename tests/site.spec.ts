@@ -21,7 +21,15 @@ test.describe('home', () => {
       await expect(tiles.nth(i).locator('.card-title')).toHaveText(p.title);
       if (p.stat) await expect(tiles.nth(i).locator('.card-stat')).toHaveText(p.stat);
       // Screen readers hear the title first, then the kind of work and the proof.
-      expect((await tiles.nth(i).getAttribute('aria-label'))!.startsWith(`${p.title}. `)).toBe(true);
+      const label = (await tiles.nth(i).getAttribute('aria-label'))!;
+      expect(label.startsWith(`${p.title}. `)).toBe(true);
+      // The proof is spoken in words (the visual reports are hidden from screen readers).
+      if (p.scores) expect(label).toContain(`performance ${p.scores.values[0].value}`);
+      if (p.results) expect(label).toContain(`${p.results.failed} failed`);
+      if (caseStudies[p.slug]) {
+        expect(label.endsWith('Case study')).toBe(true);
+        await expect(tiles.nth(i).locator('.card-cta')).toHaveText(/Case study/);
+      }
     }
   });
 
@@ -266,6 +274,9 @@ test.describe('work index', () => {
     expect(await list.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
     await expect(page.locator('[data-track-count]')).toHaveText(`1 / ${projects.length}`);
+    // The first card starts in the middle of the screen, like every other card.
+    const first = (await item(page, 0).boundingBox())!;
+    expect(Math.abs(first.x + first.width / 2 - 195)).toBeLessThan(3);
     for (const tile of await tiles(page).all()) await expect(tile.locator('.card')).toHaveCSS('height', /^4[0-9]{2}px$/);
     await page.locator('[data-dot="3"]').click();
     await expect(item(page, 3)).toHaveAttribute('data-active', '');

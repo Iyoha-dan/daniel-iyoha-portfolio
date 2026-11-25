@@ -17,6 +17,9 @@
   --term-text: #e9e8e1;
   --term-dim: #9b998e;
   --term-pass: #5fd09a;
+  /* Edge on dark panels (none in light mode) and the paper behind test reports. */
+  --edge: transparent;
+  --report-paper: #e9e8e1;
 
   --sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
@@ -42,6 +45,8 @@
     --pass: #56c690;
     --pass-tint: #173324;
     --term: #0b0b0a;
+    --edge: rgb(255 255 255 / 0.14);
+    --report-paper: #cfcdc3;
   }
 }
 :root[data-theme='dark'] {
@@ -56,6 +61,8 @@
   --pass: #56c690;
   --pass-tint: #173324;
   --term: #0b0b0a;
+  --edge: rgb(255 255 255 / 0.14);
+  --report-paper: #cfcdc3;
   color-scheme: dark;
 }
 :root[data-theme='light'] {

@@ -22,6 +22,16 @@ const shots = import.meta.glob<{ default: ImageMetadata }>('../assets/work/*.jpg
 const shot = (p: Project) => p.shots && shots[`../assets/work/${p.shots}-desktop.jpg`]?.default;
 // Projects with a case study open their own page; the rest jump to their section below.
 const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.slug}`);
+// What a screen reader hears for each project: the title, the kind of work, the proof in words
+// (the visual reports are aria-hidden), and where the link goes.
+const spoken = (p: Project) => {
+  let proof = p.stat ?? '';
+  if (p.scores) proof = `Lighthouse on mobile: ${p.scores.values.map((s) => `${s.label === 'SEO' ? 'SEO' : s.label.toLowerCase()} ${s.value}`).join(', ')}`;
+  else if (p.results)
+    proof = `${p.results.label}: ${p.results.passed + p.results.failed} test cases, ${p.results.passed} passed, ${p.results.failed} failed, ${p.bugs?.length ?? 0} bugs logged`;
+  else if (p.checks) proof = `${p.checks.length} ${(p.checksLabel ?? 'checks').toLowerCase()}: ${p.checks.join(', ')}`;
+  return [p.title, p.kind, proof, caseStudies[p.slug] ? 'Case study' : ''].filter(Boolean).join('. ');
+};
 ---
 
 <section id="work" class="work-index wrap section-rule" aria-labelledby="work-title">
@@ -31,7 +41,7 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
   <div class="section-head" data-reveal>
     <h2 id="work-title">Work</h2>
     <p class="section-lede">
-      What I've built and tested. <span class="hint-desk">Point at a project to open it up; click it for the case study.</span><span class="hint-touch">Swipe through, and tap one for its case study.</span>
+      What I've built and tested.
     </p>
   </div>
 
@@ -45,12 +55,11 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
               class="tile"
               href={href(p)}
               data-tile
-              aria-label={`${p.title}. ${p.kind}${p.stat ? `. ${p.stat}` : ''}`}
+              aria-label={spoken(p)}
               style={p.accent ? `--accent:${p.accent}` : undefined}
             >
               <span class="tile-label" aria-hidden="true">
                 <span class="tile-title">{p.title}</span>
-                <span class="tile-num">0{i + 1}</span>
               </span>
               <span class="card" data-card={i}>
                 <span class="card-top">
@@ -127,6 +136,11 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
                   <span class="card-kind">{p.kind}</span>
                   <span class="card-title">{p.title}</span>
                   {p.stat && <span class="card-stat">{p.stat}</span>}
+                  {caseStudies[p.slug] && (
+                    <span class="card-cta" aria-hidden="true">
+                      Case study <span class="cta-arrow">→</span>
+                    </span>
+                  )}
                 </span>
               </span>
             </a>
@@ -237,7 +251,7 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
         }
         const k = Math.min(d, 1);
         card.style.transform = reduced.matches ? '' : `scale(${1 - k * 0.08})`;
-        card.style.opacity = String(1 - k * 0.4);
+        card.style.opacity = String(1 - k * 0.22); // side cards stay readable, not "disabled"
       });
       return best;
     };
@@ -361,6 +375,27 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     font-size: 0.8rem;
     color: var(--pass);
   }
+  .card-cta {
+    display: inline-flex;
+    gap: 6px;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .cta-arrow {
+    color: var(--pass);
+    transition: transform 200ms var(--ease-out);
+  }
+  .tile:focus-visible .cta-arrow {
+    transform: translateX(4px);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .tile:hover .cta-arrow {
+      transform: translateX(4px);
+    }
+  }
 
   /* QA cards: the real test report instead of a screenshot (the products can't be shown). */
   .report {
@@ -371,7 +406,7 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     width: 100%;
     padding: 16px;
     border-radius: 10px 10px 0 0;
-    background: var(--term-text);
+    background: var(--report-paper);
     color: #151513;
     font-family: var(--mono);
     font-size: 0.74rem;
@@ -549,7 +584,8 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     width: 7px;
     height: 7px;
     border-radius: 999px;
-    background: var(--line-strong);
+    background: var(--ink-3);
+    opacity: 0.55;
     transition:
       width 220ms var(--ease-out),
       background-color 220ms ease;
@@ -557,13 +593,11 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
   .dots button[aria-current='true']::before {
     width: 20px;
     background: var(--ink);
+    opacity: 1;
   }
 
   /* ---------- Desktop: expanding panels ---------- */
   @media (min-width: 961px) {
-    .hint-touch {
-      display: none;
-    }
     .track {
       display: flex;
       gap: 10px;
@@ -581,6 +615,7 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       overflow: hidden;
       border-radius: 18px;
       background: var(--accent, var(--term));
+      box-shadow: inset 0 0 0 1px var(--edge);
     }
     .tile:focus-visible {
       outline: 3px solid var(--pass);
@@ -591,9 +626,9 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       inset: 0;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
-      padding: 20px 0;
+      padding: 22px 0;
       color: #fff;
       transition: opacity 200ms ease;
     }
@@ -604,11 +639,6 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       font-weight: 720;
       letter-spacing: -0.01em;
       white-space: nowrap;
-    }
-    .tile-num {
-      font-family: var(--mono);
-      font-size: 0.75rem;
-      opacity: 0.8;
     }
     .track li[data-active] .tile-label {
       opacity: 0;
@@ -633,9 +663,6 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
 
   /* ---------- Phones and tablets: snap carousel ---------- */
   @media (max-width: 960px) {
-    .hint-desk {
-      display: none;
-    }
     .track {
       display: flex;
       gap: 12px;
@@ -643,7 +670,8 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       scroll-snap-type: x mandatory;
       overscroll-behavior-x: contain;
       margin-inline: calc(-1 * var(--gutter));
-      padding-inline: max(var(--gutter), 9%);
+      /* Half the leftover width on each side, so the first and last cards can centre too. */
+      padding-inline: calc((100vw - min(82vw, 440px)) / 2);
       padding-block: 4px 12px;
       scrollbar-width: none;
     }
@@ -651,7 +679,7 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
       display: none;
     }
     .track li {
-      flex: 0 0 min(82%, 440px);
+      flex: 0 0 min(82vw, 440px);
       scroll-snap-align: center;
     }
     .tile-label {
