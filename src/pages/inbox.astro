@@ -78,8 +78,9 @@ import { person } from '../data/profile';
   const OWNER = 'danieliyoha6@gmail.com';
   const app = initializeApp({
     apiKey: 'AIzaSyDfgkmRMWI5NAnYlib6ZPJQG8qdRkXO_KA',
-    // On the live site, sign in through its own domain (fewer third-party cookie problems).
-    authDomain: location.hostname.endsWith('.web.app') ? location.hostname : 'daniel-iyoha.firebaseapp.com',
+    // Must be the firebaseapp.com domain: it's the only sign-in return address Google's OAuth client
+    // accepts (web.app gave "Error 400: redirect_uri_mismatch").
+    authDomain: 'daniel-iyoha.firebaseapp.com',
     projectId: 'daniel-iyoha',
     appId: '1:974713456800:web:d932c1f8f58b58ede5a1c5',
   });
