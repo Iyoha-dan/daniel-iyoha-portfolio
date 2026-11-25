@@ -68,25 +68,48 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
             >
               <span class="card-top">
                 {img ? (
-                  <Image src={img} alt="" widths={[360, 720]} sizes="(min-width: 961px) 480px, 1px" class="card-shot" />
+                  <>
+                    <Image src={img} alt="" widths={[360, 720]} sizes="(min-width: 961px) 480px, 1px" class="card-shot" />
+                    {p.scores && (
+                      <span class="lh" aria-hidden="true">
+                        <span class="lh-cmd">$ lighthouse {p.link?.label ?? p.title}</span>
+                        {p.scores.values.map((s, k) => (
+                          <span class="lh-row step" style={`--i:${k}`}>
+                            <span class="mark" style={`--done:${k * 140 + 640}ms`}>
+                              <span class="pend">·</span>
+                              <span class="tick">✓</span>
+                            </span>
+                            <span class="lh-label">{s.label}</span>
+                            <span class="lh-score" data-count={s.value} data-at={k * 140 + 150} data-for="520">
+                              {s.value}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span class="report" aria-hidden="true">
                     <span class="report-title">{p.results ? 'Test report' : 'Release checklist'}</span>
                     {p.results ? (
                       <>
                         <span class="report-line">
-                          {p.results.label}: {p.results.passed + p.results.failed} test cases
+                          {p.results.label}:{' '}
+                          <span data-count={p.results.passed + p.results.failed} data-at="150" data-for="900">
+                            {p.results.passed + p.results.failed}
+                          </span>{' '}
+                          test cases
                         </span>
-                        <span class="bar" style={`grid-template-columns:${p.results.passed}fr ${p.results.failed}fr`}>
+                        <span class="bar fill" style={`grid-template-columns:${p.results.passed}fr ${p.results.failed}fr`}>
                           <span class="bar-pass" />
                           <span class="bar-fail" />
                         </span>
-                        <span class="report-line legend">
+                        <span class="report-line legend step" style="--at:1050ms">
                           <span class="pass">{p.results.passed} passed</span>
                           <span class="fail">{p.results.failed} failed</span>
                         </span>
-                        {p.bugs?.map((b) => (
-                          <span class="report-line bug">
+                        {p.bugs?.map((b, k) => (
+                          <span class="report-line bug step" style={`--at:${1250 + k * 180}ms`}>
                             <span>
                               <span class="bug-id">{b.id}</span> · {b.severity}
                             </span>
@@ -95,12 +118,20 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
                         ))}
                       </>
                     ) : (
-                      (p.checks ?? []).map((c) => (
-                        <span class="report-line">
-                          <span class="tick">✓</span>
-                          {c}
+                      <>
+                        {(p.checks ?? []).map((c, k) => (
+                          <span class="report-line step" style={`--i:${k}`}>
+                            <span class="mark" style={`--done:${k * 140 + 360}ms`}>
+                              <span class="pend">·</span>
+                              <span class="tick">✓</span>
+                            </span>
+                            {c}
+                          </span>
+                        ))}
+                        <span class="report-line summary step" style={`--at:${(p.checks?.length ?? 0) * 140 + 450}ms`}>
+                          {p.checks?.length}/{p.checks?.length} {(p.checksLabel ?? 'checks').toLowerCase()}
                         </span>
-                      ))
+                      </>
                     )}
                   </span>
                 )}
@@ -125,10 +156,51 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     const rows = [...list.querySelectorAll<HTMLAnchorElement>('a[data-index]')];
     const cards = [...stack.querySelectorAll<HTMLAnchorElement>('[data-card]')];
 
+    // Each card replays its checks when it comes up: rows step in and tick (CSS, under
+    // .is-running), and numbers count up to the real result (below). Reduced motion skips the
+    // replay; the markup already holds the final results.
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+    let runId = 0;
+    const run = (card: HTMLElement) => {
+      if (reduced.matches) return;
+      const id = ++runId;
+      card.classList.remove('is-running');
+      void card.offsetWidth; // restart the CSS animations
+      card.classList.add('is-running');
+      const counters = [...card.querySelectorAll<HTMLElement>('[data-count]')];
+      const start = performance.now();
+      counters.forEach((el) => (el.textContent = '0'));
+      const tick = (now: number) => {
+        if (id !== runId) return; // another card took over
+        let busy = false;
+        for (const el of counters) {
+          const target = Number(el.dataset.count);
+          const t = Math.min(Math.max((now - start - Number(el.dataset.at)) / Number(el.dataset.for), 0), 1);
+          el.textContent = String(Math.round(target * easeOut(t)));
+          if (t < 1) busy = true;
+        }
+        if (busy) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+
+    // Runs start once the preview is on screen, so the first card isn't over before anyone sees it.
+    let seen = false;
+    let current = -1;
     const show = (index: number) => {
+      if (index === current) return;
+      current = index;
       rows.forEach((row, i) => row.classList.toggle('is-active', i === index));
       cards.forEach((card, i) => card.toggleAttribute('data-active', i === index));
+      if (seen) run(cards[index]);
     };
+    new IntersectionObserver((entries, observer) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      seen = true;
+      run(cards[current]);
+      observer.disconnect();
+    }, { threshold: 0.4 }).observe(stack);
 
     // Only switch once the pointer settles on a row: on the way across to the preview it passes
     // over other rows, and switching on every one would swap the card out from under the click.
@@ -364,6 +436,113 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
     gap: 2px;
     padding-top: 8px;
     border-top: 1px dashed #bdb9ab;
+  }
+
+  .summary {
+    padding-top: 8px;
+    border-top: 1px dashed #bdb9ab;
+    color: #15744a;
+    font-weight: 600;
+  }
+
+  /* Website cards: a Lighthouse run over the screenshot (real mobile scores from profile.ts). */
+  .card-top {
+    position: relative;
+  }
+  .lh {
+    position: absolute;
+    left: 18px;
+    bottom: 16px;
+    display: grid;
+    gap: 5px;
+    width: min(250px, calc(100% - 36px));
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #151513;
+    box-shadow: 0 16px 32px -16px rgb(0 0 0 / 0.6);
+    color: var(--term-text);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+  }
+  .lh-cmd {
+    margin-bottom: 3px;
+    color: var(--term-dim);
+  }
+  .lh-row {
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    gap: 8px;
+  }
+  .lh-score {
+    color: var(--term-pass);
+    font-variant-numeric: tabular-nums;
+  }
+  .lh .tick {
+    color: var(--term-pass);
+  }
+
+  /* Pending dot that turns into a tick, stacked in one cell. */
+  .mark {
+    display: grid;
+    width: 1ch;
+  }
+  .mark > * {
+    grid-area: 1 / 1;
+  }
+  .pend {
+    opacity: 0;
+    color: currentColor;
+  }
+
+  /* The replay. Without .is-running (or with reduced motion) everything shows its final state. */
+  @media (prefers-reduced-motion: no-preference) {
+    .is-running .step {
+      animation: step-in 300ms var(--ease-out) both;
+      animation-delay: var(--at, calc(150ms + var(--i, 0) * 140ms));
+    }
+    .is-running .lh {
+      animation: step-in 320ms var(--ease-out) both;
+    }
+    .is-running .mark .pend {
+      animation: pend-out 1ms linear both;
+      animation-delay: var(--done);
+    }
+    .is-running .mark .tick {
+      animation: tick-in 260ms var(--ease-out) both;
+      animation-delay: var(--done);
+    }
+    .is-running .fill {
+      animation: bar-fill 900ms var(--ease-out) both;
+      animation-delay: 150ms;
+    }
+  }
+  @keyframes step-in {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+  }
+  @keyframes pend-out {
+    from {
+      opacity: 0.5;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes tick-in {
+    from {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+  }
+  @keyframes bar-fill {
+    from {
+      clip-path: inset(0 100% 0 0 round 3px);
+    }
+    to {
+      clip-path: inset(0 0 0 0 round 3px);
+    }
   }
 
   @media (hover: hover) and (pointer: fine) {

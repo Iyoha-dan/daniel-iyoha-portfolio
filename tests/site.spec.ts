@@ -216,6 +216,35 @@ test.describe('work index', () => {
     await expect(page).toHaveURL((url) => url.pathname === target);
   });
 
+  test('a preview runs its checks and lands on the real results', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('#work').scrollIntoViewIfNeeded();
+    for (const [i, p] of projects.entries()) {
+      await page.locator('[data-index-list] a').nth(i).hover();
+      const card = page.locator(`[data-card="${i}"]`);
+      await expect(card).toHaveClass(/is-running/);
+      const counters = card.locator('[data-count]');
+      // Every number counts up to the figure in profile.ts, never past it or short of it.
+      for (const el of await counters.all()) await expect(el).toHaveText((await el.getAttribute('data-count'))!);
+      if (p.scores) await expect(counters).toHaveText(p.scores.values.map((s) => String(s.value)));
+      if (p.results) await expect(counters).toHaveText([String(p.results.passed + p.results.failed)]);
+      if (!p.results && p.checks) await expect(card.locator('.summary')).toHaveText(`${p.checks.length}/${p.checks.length} ${p.checksLabel!.toLowerCase()}`);
+    }
+  });
+
+  test('with reduced motion the results show at once, without a replay', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('#work').scrollIntoViewIfNeeded();
+    const i = projects.findIndex((p) => p.results);
+    await page.locator('[data-index-list] a').nth(i).hover();
+    const card = page.locator(`[data-card="${i}"]`);
+    await expect(card).toHaveAttribute('data-active', '');
+    await expect(card).not.toHaveClass(/is-running/);
+    const p = projects[i];
+    await expect(card.locator('[data-count]')).toHaveText(String(p.results!.passed + p.results!.failed));
+  });
+
   test('keyboard focus moves the preview too', async ({ page }) => {
     await page.locator('[data-index-list] a').nth(3).focus();
     await expect(page.locator('[data-card][data-active]')).toHaveAttribute('data-card', '3');
