@@ -22,15 +22,15 @@ const shots = import.meta.glob<{ default: ImageMetadata }>('../assets/work/*.jpg
 const shot = (p: Project) => p.shots && shots[`../assets/work/${p.shots}-desktop.jpg`]?.default;
 // Projects with a case study open their own page; the rest jump to their section below.
 const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.slug}`);
-// What a screen reader hears for each project: the title, the kind of work, the proof in words
-// (the visual reports are aria-hidden), and where the link goes.
-const spoken = (p: Project) => {
-  let proof = p.stat ?? '';
-  if (p.scores) proof = `Lighthouse on mobile: ${p.scores.values.map((s) => `${s.label === 'SEO' ? 'SEO' : s.label.toLowerCase()} ${s.value}`).join(', ')}`;
-  else if (p.results)
-    proof = `${p.results.label}: ${p.results.passed + p.results.failed} test cases, ${p.results.passed} passed, ${p.results.failed} failed, ${p.bugs?.length ?? 0} bugs logged`;
-  else if (p.checks) proof = `${p.checks.length} ${(p.checksLabel ?? 'checks').toLowerCase()}: ${p.checks.join(', ')}`;
-  return [p.title, p.kind, proof, caseStudies[p.slug] ? 'Case study' : ''].filter(Boolean).join('. ');
+// The proof in words, for screen readers (the visual reports are aria-hidden). Each link's name
+// comes from its own visible text plus this, so what voice-control users see is what they can say.
+// Empty when the visible stat already says it plainly.
+const spokenProof = (p: Project) => {
+  if (p.scores) return `Lighthouse on mobile: ${p.scores.values.map((s) => `${s.label === 'SEO' ? 'SEO' : s.label.toLowerCase()} ${s.value}`).join(', ')}`;
+  if (p.results)
+    return `${p.results.label}: ${p.results.passed + p.results.failed} test cases, ${p.results.passed} passed, ${p.results.failed} failed, ${p.bugs?.length ?? 0} bugs logged`;
+  if (p.checks) return `${p.checks.length} ${(p.checksLabel ?? 'checks').toLowerCase()}: ${p.checks.join(', ')}`;
+  return '';
 };
 ---
 
@@ -49,13 +49,13 @@ const spoken = (p: Project) => {
     {
       projects.map((p, i) => {
         const img = shot(p);
+        const proof = spokenProof(p);
         return (
           <li data-index={i}>
             <a
               class="tile"
               href={href(p)}
               data-tile
-              aria-label={spoken(p)}
               style={p.accent ? `--accent:${p.accent}` : undefined}
             >
               <span class="tile-label" aria-hidden="true">
@@ -132,14 +132,22 @@ const spoken = (p: Project) => {
                     </span>
                   )}
                 </span>
+                {/* Title first so screen readers lead with it; CSS shows the kind above it. */}
                 <span class="card-body">
-                  <span class="card-kind">{p.kind}</span>
                   <span class="card-title">{p.title}</span>
-                  {p.stat && <span class="card-stat">{p.stat}</span>}
+                  <span class="sr-only">, </span>
+                  <span class="card-kind">{p.kind}</span>
+                  {/* The stat in symbols ("93 · 96") is replaced by the proof in words where there is one. */}
+                  {p.stat && !proof && <span class="sr-only">. </span>}
+                  {p.stat && <span class="card-stat" aria-hidden={proof ? 'true' : undefined}>{p.stat}</span>}
+                  {proof && <span class="sr-only">. {proof}</span>}
                   {caseStudies[p.slug] && (
-                    <span class="card-cta" aria-hidden="true">
-                      Case study <span class="cta-arrow">→</span>
-                    </span>
+                    <>
+                      <span class="sr-only">. </span>
+                      <span class="card-cta">
+                        Case study <span class="cta-arrow" aria-hidden="true">→</span>
+                      </span>
+                    </>
                   )}
                 </span>
               </span>
@@ -236,7 +244,8 @@ const spoken = (p: Project) => {
       });
     });
 
-    /* Phones: the card nearest the middle is in focus; the others shrink and fade a little. */
+    /* Phones: the card nearest the middle is in focus; the others shrink a little. No fade: it
+       pushed the side cards' small report text below 4.5:1 contrast. */
     const paint = () => {
       const box = list.getBoundingClientRect();
       const mid = box.left + box.width / 2;
@@ -251,7 +260,6 @@ const spoken = (p: Project) => {
         }
         const k = Math.min(d, 1);
         card.style.transform = reduced.matches ? '' : `scale(${1 - k * 0.08})`;
-        card.style.opacity = String(1 - k * 0.22); // side cards stay readable, not "disabled"
       });
       return best;
     };
@@ -282,7 +290,7 @@ const spoken = (p: Project) => {
     );
 
     const layout = () => {
-      if (desk.matches) cards.forEach((c) => ((c.style.transform = ''), (c.style.opacity = '')));
+      if (desk.matches) cards.forEach((c) => (c.style.transform = ''));
       else paint();
     };
     desk.addEventListener('change', layout);
@@ -357,6 +365,7 @@ const spoken = (p: Project) => {
     padding: 16px 20px 20px;
   }
   .card-kind {
+    order: -1;
     font-family: var(--mono);
     font-size: 0.72rem;
     letter-spacing: 0.04em;
@@ -406,6 +415,11 @@ const spoken = (p: Project) => {
     width: 100%;
     padding: 16px;
     border-radius: 10px 10px 0 0;
+    /* Text colours are deep enough for 4.5:1 at this small size on both papers
+       (light #e9e8e1 and the darker dark-mode #cfcdc3). */
+    --report-dim: #4f4e47;
+    --report-pass: #0e5c3c;
+    --report-fail: #9a2019;
     background: var(--report-paper);
     color: #151513;
     font-family: var(--mono);
@@ -416,14 +430,14 @@ const spoken = (p: Project) => {
     border-bottom: 1px dashed #bdb9ab;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #66655c;
+    color: var(--report-dim);
   }
   .report-line {
     display: flex;
     gap: 8px;
   }
   .report-line .tick {
-    color: #15744a;
+    color: var(--report-pass);
     font-weight: 700;
   }
   .bar {
@@ -444,11 +458,11 @@ const spoken = (p: Project) => {
     justify-content: space-between;
   }
   .legend .pass {
-    color: #15744a;
+    color: var(--report-pass);
   }
   .legend .fail,
   .bug-id {
-    color: #b3261e;
+    color: var(--report-fail);
   }
   .bug-id {
     font-weight: 600;
@@ -462,7 +476,7 @@ const spoken = (p: Project) => {
   .summary {
     padding-top: 8px;
     border-top: 1px dashed #bdb9ab;
-    color: #15744a;
+    color: var(--report-pass);
     font-weight: 600;
   }
 

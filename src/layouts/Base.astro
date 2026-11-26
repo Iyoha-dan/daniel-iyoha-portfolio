@@ -1,5 +1,11 @@
 ---
 import '../styles/global.css';
+// The three faces every page uses (Latin subset). Preloaded so they arrive before the first
+// layout: found late through the CSS, each one forced a full re-layout that blocked the main
+// thread for ~300ms on a mid-range phone.
+import sansFont from '@fontsource-variable/schibsted-grotesk/files/schibsted-grotesk-latin-wght-normal.woff2?url';
+import monoFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
+import monoMediumFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2?url';
 
 interface Props {
   title: string;
@@ -8,7 +14,10 @@ interface Props {
   noindex?: boolean;
 }
 const { title, description, noindex = false } = Astro.props;
-const canonical = new URL(Astro.url.pathname, Astro.site);
+// The build writes /websites.html, but Firebase serves (and 301-redirects to) /websites, so
+// canonical and og:url use the clean address.
+const cleanPath = Astro.url.pathname.replace(/\.html$/, '').replace(/(^|\/)index$/, '$1') || '/';
+const canonical = new URL(cleanPath, Astro.site);
 ---
 
 <!doctype html>
@@ -17,6 +26,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    {[sansFont, monoFont, monoMediumFont].map((href) => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin />)}
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical} />
@@ -27,7 +37,13 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:site_name" content="Daniel Iyoha" />
+    {/* Link previews (LinkedIn, WhatsApp, X). Regenerate with: node scripts/og/render.mjs */}
+    <meta property="og:image" content={new URL('/og.png', Astro.site)} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Daniel Iyoha, QA & Web Development, Lagos: I build websites, then I try to break them." />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:creator" content="@DanielIyoha9" />
     <script is:inline>
       document.documentElement.classList.add('js');

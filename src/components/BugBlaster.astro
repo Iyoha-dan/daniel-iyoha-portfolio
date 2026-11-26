@@ -58,12 +58,29 @@
     /* The mini screen: the demo plays itself while it's on screen (one still frame with reduced motion). */
     const mini = new BugBlaster(root.querySelector<HTMLCanvasElement>('[data-mini-canvas]')!, { demo: true });
     showBest(mini.best);
-    for (let i = 0; i < 60 * 4; i++) mini.update(1 / 60); // start mid-game, with bugs on screen
-    mini.draw();
+    // Start mid-game, with bugs on screen. Simulating those 4 seconds costs ~130ms on a mid-range
+    // phone, so it waits until the player is near the screen instead of slowing the page load.
+    let primed = false;
+    const prime = () => {
+      if (primed) return;
+      primed = true;
+      for (let i = 0; i < 60 * 4; i++) mini.update(1 / 60);
+      mini.draw();
+    };
+    new IntersectionObserver(
+      ([entry], observer) => {
+        if (!entry.isIntersecting) return;
+        prime();
+        observer.disconnect();
+      },
+      { rootMargin: '600px 0px' },
+    ).observe(root);
     let miniVisible = false;
     const syncMini = () => {
-      if (miniVisible && !dialog.open && !document.hidden && !reduced.matches) mini.run();
-      else mini.stop();
+      if (miniVisible && !dialog.open && !document.hidden && !reduced.matches) {
+        prime();
+        mini.run();
+      } else mini.stop();
     };
     new IntersectionObserver(([entry]) => {
       miniVisible = entry.isIntersecting;

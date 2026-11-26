@@ -87,11 +87,11 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
                   <span />
                   <p>{p.link?.label}</p>
                 </div>
-                <Image src={desktop} alt={`${p.title} homepage on a desktop screen`} widths={[720, 1080, 1440]} sizes="(min-width: 1180px) 900px, 92vw" />
+                <Image src={desktop} alt={`${p.title} homepage on a desktop screen`} widths={[480, 720, 1080, 1440]} sizes="(min-width: 1180px) 940px, 80vw" />
               </div>
               {mobile && (
                 <div class="phone">
-                  <Image src={mobile} alt={`${p.title} homepage on a phone`} widths={[240, 480]} sizes="220px" />
+                  <Image src={mobile} alt={`${p.title} homepage on a phone`} widths={[120, 180, 240, 360, 480]} sizes="(min-width: 1280px) 210px, (min-width: 600px) 17vw, 88px" />
                 </div>
               )}
             </div>

@@ -20,14 +20,17 @@ test.describe('home', () => {
     for (const [i, p] of projects.entries()) {
       await expect(tiles.nth(i).locator('.card-title')).toHaveText(p.title);
       if (p.stat) await expect(tiles.nth(i).locator('.card-stat')).toHaveText(p.stat);
-      // Screen readers hear the title first, then the kind of work and the proof.
-      const label = (await tiles.nth(i).getAttribute('aria-label'))!;
-      expect(label.startsWith(`${p.title}. `)).toBe(true);
+      // The name comes from the card's own text (no aria-label to drift from what's on screen):
+      // screen readers hear the title first, then the kind of work and the proof.
+      await expect(tiles.nth(i)).not.toHaveAttribute('aria-label');
+      const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // (Browsers put a space around each grid item, so allow it around the punctuation.)
+      await expect(tiles.nth(i)).toHaveAccessibleName(new RegExp(`^${esc(p.title)}\\s*,\\s*${esc(p.kind)}\\s*\\.\\s`));
       // The proof is spoken in words (the visual reports are hidden from screen readers).
-      if (p.scores) expect(label).toContain(`performance ${p.scores.values[0].value}`);
-      if (p.results) expect(label).toContain(`${p.results.failed} failed`);
+      if (p.scores) await expect(tiles.nth(i)).toHaveAccessibleName(new RegExp(`performance ${p.scores.values[0].value}`));
+      if (p.results) await expect(tiles.nth(i)).toHaveAccessibleName(new RegExp(`${p.results.failed} failed`));
       if (caseStudies[p.slug]) {
-        expect(label.endsWith('Case study')).toBe(true);
+        await expect(tiles.nth(i)).toHaveAccessibleName(/Case study$/);
         await expect(tiles.nth(i).locator('.card-cta')).toHaveText(/Case study/);
       }
     }

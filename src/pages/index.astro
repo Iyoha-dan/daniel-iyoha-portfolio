@@ -37,6 +37,20 @@ const runDate =
   run && new Date(run.stats.startTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 const external = { target: '_blank', rel: 'noopener noreferrer' };
+
+// Tells search engines who the site is about, so a search for the name can link it to the profiles.
+const personData = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: person.name,
+  url: Astro.site?.href,
+  image: new URL('/og.png', Astro.site).href,
+  jobTitle: 'QA Tester and Web Developer',
+  description: person.intro,
+  address: { '@type': 'PostalAddress', addressLocality: 'Lagos', addressCountry: 'NG' },
+  sameAs: [person.linkedin, person.github, person.x],
+  knowsAbout: ['Software testing', 'Test automation', 'Playwright', 'Web development', 'Web accessibility', 'Astro'],
+};
 ---
 
 <Base
@@ -44,6 +58,7 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
   description={`${person.name} is a QA tester and web developer in Lagos. ${person.intro}`}
 >
   <SiteHeader home />
+  <script type="application/ld+json" set:html={JSON.stringify(personData)} />
 
   <main id="main">
     <section class="hero wrap" aria-labelledby="hero-title">
