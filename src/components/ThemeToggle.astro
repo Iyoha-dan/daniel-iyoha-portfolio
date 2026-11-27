@@ -2,9 +2,15 @@
 // Light/dark switch. The new theme spreads out from the button as a growing circle
 // (View Transitions API); browsers without it, and visitors who prefer reduced motion,
 // get an instant switch instead.
+import { ui, type Lang } from '../i18n';
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+const t = ui[lang].theme;
 ---
 
-<button class="theme-toggle" type="button" aria-label="Switch to dark theme" data-theme-toggle>
+<button class="theme-toggle" type="button" aria-label={t.toDark} data-theme-toggle data-label-dark={t.toDark} data-label-light={t.toLight}>
   <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true">
     <circle cx="12" cy="12" r="4.2"></circle>
     <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"></path>
@@ -24,7 +30,7 @@
 
   const label = () => {
     const next = current() === 'dark' ? 'light' : 'dark';
-    button.setAttribute('aria-label', `Switch to ${next} theme`);
+    button.setAttribute('aria-label', (next === 'dark' ? button.dataset.labelDark : button.dataset.labelLight) ?? `Switch to ${next} theme`);
   };
 
   const apply = (theme: 'light' | 'dark') => {

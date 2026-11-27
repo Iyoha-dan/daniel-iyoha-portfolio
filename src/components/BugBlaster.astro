@@ -1,20 +1,51 @@
 ---
 // The arcade "mini player" in the Bug hunt section: a small screen where the ship plays itself,
 // and a Play button that opens the full game in a dialog. Game code: src/scripts/bug-blaster.ts.
+// The game screen stays English on every page (its pixel font has no umlauts); the frame around it
+// speaks the page's language.
+import type { Lang } from '../i18n';
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+const t = {
+  en: {
+    text: 'Prefer something faster? Shoot the bugs before they ship to production.',
+    play: 'Play',
+    best: 'Best: ',
+    soundOn: 'Sound on',
+    soundOff: 'Sound off',
+    close: 'Close the game',
+    screen: 'Bug blaster game screen. Press Space to start.',
+    help: 'Arrow keys or WASD to move, Space to fire, P to pause. On a phone, drag to move; it fires by itself.',
+    over: 'Game over. {s} points. Best {b}.',
+  },
+  de: {
+    text: 'Lieber etwas Schnelleres? Schießen Sie die Bugs ab, bevor sie live gehen.',
+    play: 'Spielen',
+    best: 'Rekord: ',
+    soundOn: 'Ton an',
+    soundOff: 'Ton aus',
+    close: 'Spiel schließen',
+    screen: 'Bug-Blaster-Spielfeld. Mit der Leertaste starten.',
+    help: 'Pfeiltasten oder WASD zum Bewegen, Leertaste zum Schießen, P für Pause. Auf dem Handy ziehen zum Bewegen; geschossen wird automatisch.',
+    over: 'Spiel vorbei. {s} Punkte. Rekord {b}.',
+  },
+}[lang];
 ---
 
-<div class="mini" data-blaster>
+<div class="mini" data-blaster data-best-label={t.best} data-sound-on={t.soundOn} data-sound-off={t.soundOff} data-over={t.over}>
   <div class="mini-screen" aria-hidden="true">
     <canvas data-mini-canvas></canvas>
   </div>
   <div class="mini-info">
     <p class="mini-kicker">Arcade</p>
     <h3 class="mini-title">Bug blaster</h3>
-    <p class="mini-text">Prefer something faster? Shoot the bugs before they ship to production.</p>
+    <p class="mini-text">{t.text}</p>
     <div class="mini-actions">
       <button type="button" class="mini-play" data-blaster-open>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5v9l8-4.5z" fill="currentColor" /></svg>
-        Play
+        {t.play}
       </button>
       <span class="mini-best" data-blaster-best hidden></span>
     </div>
@@ -25,14 +56,14 @@
   <div class="arcade-bar">
     <h2 id="arcade-title">Bug blaster</h2>
     <div class="arcade-tools">
-      <button type="button" class="arcade-btn" data-blaster-sound aria-pressed="false">Sound off</button>
-      <button type="button" class="arcade-btn arcade-close" data-blaster-close aria-label="Close the game">✕</button>
+      <button type="button" class="arcade-btn" data-blaster-sound aria-pressed="false">{t.soundOff}</button>
+      <button type="button" class="arcade-btn arcade-close" data-blaster-close aria-label={t.close}>✕</button>
     </div>
   </div>
   <div class="arcade-stage" data-blaster-stage>
-    <canvas data-game-canvas tabindex="0" autofocus role="img" aria-label="Bug blaster game screen. Press Space to start."></canvas>
+    <canvas data-game-canvas tabindex="0" autofocus role="img" aria-label={t.screen}></canvas>
   </div>
-  <p class="arcade-help">Arrow keys or WASD to move, Space to fire, P to pause. On a phone, drag to move; it fires by itself.</p>
+  <p class="arcade-help">{t.help}</p>
   <p class="sr-only" aria-live="polite" data-blaster-live></p>
 </dialog>
 
@@ -52,7 +83,7 @@
 
     const showBest = (best: number) => {
       bestEl.hidden = !best;
-      bestEl.textContent = `Best: ${best}`;
+      bestEl.textContent = `${root.dataset.bestLabel ?? 'Best: '}${best}`;
     };
 
     /* The mini screen: the demo plays itself while it's on screen (one still frame with reduced motion). */
@@ -98,7 +129,7 @@
     };
     game.onChange = report;
     game.onGameOver = (score, best) => {
-      live.textContent = `Game over. ${score} points. Best ${best}.`;
+      live.textContent = (root.dataset.over ?? 'Game over. {s} points. Best {b}.').replace('{s}', String(score)).replace('{b}', String(best));
       showBest(best);
       // Same moment as the end of a bug hunt: the feedback card may ask a quick question.
       document.dispatchEvent(new CustomEvent('bughunt:over'));
@@ -197,7 +228,7 @@
     const setSound = (on: boolean) => {
       sound.on = on;
       soundBtn.setAttribute('aria-pressed', String(on));
-      soundBtn.textContent = on ? 'Sound on' : 'Sound off';
+      soundBtn.textContent = (on ? root.dataset.soundOn : root.dataset.soundOff) ?? (on ? 'Sound on' : 'Sound off');
       try {
         localStorage.setItem('bug-blaster-sound', on ? 'on' : 'off');
       } catch {}

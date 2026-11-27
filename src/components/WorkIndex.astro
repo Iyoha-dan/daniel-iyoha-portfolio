@@ -12,11 +12,14 @@ import { Image } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 import type { Project } from '../data/profile';
 import { caseStudies } from '../data/case-studies';
+import { ui, type Lang } from '../i18n';
 
 interface Props {
   projects: Project[];
+  lang?: Lang;
 }
-const { projects } = Astro.props;
+const { projects, lang = 'en' } = Astro.props;
+const t = ui[lang].work;
 
 const shots = import.meta.glob<{ default: ImageMetadata }>('../assets/work/*.jpg', { eager: true });
 const shot = (p: Project) => p.shots && shots[`../assets/work/${p.shots}-desktop.jpg`]?.default;
@@ -26,10 +29,10 @@ const href = (p: Project) => (caseStudies[p.slug] ? `/work/${p.slug}` : `#${p.sl
 // comes from its own visible text plus this, so what voice-control users see is what they can say.
 // Empty when the visible stat already says it plainly.
 const spokenProof = (p: Project) => {
-  if (p.scores) return `Lighthouse on mobile: ${p.scores.values.map((s) => `${s.label === 'SEO' ? 'SEO' : s.label.toLowerCase()} ${s.value}`).join(', ')}`;
-  if (p.results)
-    return `${p.results.label}: ${p.results.passed + p.results.failed} test cases, ${p.results.passed} passed, ${p.results.failed} failed, ${p.bugs?.length ?? 0} bugs logged`;
-  if (p.checks) return `${p.checks.length} ${(p.checksLabel ?? 'checks').toLowerCase()}: ${p.checks.join(', ')}`;
+  if (p.scores)
+    return `${t.spokenScores}: ${p.scores.values.map((s) => `${s.label === 'SEO' || lang === 'de' ? s.label : s.label.toLowerCase()} ${s.value}`).join(', ')}`;
+  if (p.results) return t.spokenCases(p.results.label, p.results.passed + p.results.failed, p.results.passed, p.results.failed, p.bugs?.length ?? 0);
+  if (p.checks) return `${t.summary(p.checks.length, p.checksLabel ?? 'checks')}: ${p.checks.join(', ')}`;
   return '';
 };
 ---
@@ -39,9 +42,9 @@ const spokenProof = (p: Project) => {
   <span id="websites" class="anchor" aria-hidden="true"></span>
   <span id="qa" class="anchor" aria-hidden="true"></span>
   <div class="section-head" data-reveal>
-    <h2 id="work-title">Work</h2>
+    <h2 id="work-title">{ui[lang].nav.work}</h2>
     <p class="section-lede">
-      What I've built and tested.
+      {t.lede}
     </p>
   </div>
 
@@ -86,7 +89,7 @@ const spokenProof = (p: Project) => {
                     </>
                   ) : (
                     <span class="report" aria-hidden="true">
-                      <span class="report-title">{p.results ? 'Test report' : 'Release checklist'}</span>
+                      <span class="report-title">{p.results ? t.testReport : t.checklist}</span>
                       {p.results ? (
                         <>
                           <span class="report-line">
@@ -94,15 +97,15 @@ const spokenProof = (p: Project) => {
                             <span data-count={p.results.passed + p.results.failed} data-at="150" data-for="900">
                               {p.results.passed + p.results.failed}
                             </span>{' '}
-                            test cases
+                            {t.testCases}
                           </span>
                           <span class="bar fill" style={`grid-template-columns:${p.results.passed}fr ${p.results.failed}fr`}>
                             <span class="bar-pass" />
                             <span class="bar-fail" />
                           </span>
                           <span class="report-line legend step" style="--at:1050ms">
-                            <span class="pass">{p.results.passed} passed</span>
-                            <span class="fail">{p.results.failed} failed</span>
+                            <span class="pass">{p.results.passed} {t.passed}</span>
+                            <span class="fail">{p.results.failed} {t.failed}</span>
                           </span>
                           {p.bugs?.map((b, k) => (
                             <span class="report-line bug step" style={`--at:${1250 + k * 180}ms`}>
@@ -125,7 +128,7 @@ const spokenProof = (p: Project) => {
                             </span>
                           ))}
                           <span class="report-line summary step" style={`--at:${(p.checks?.length ?? 0) * 140 + 450}ms`}>
-                            {p.checks?.length}/{p.checks?.length} {(p.checksLabel ?? 'checks').toLowerCase()}
+                            {t.summary(p.checks?.length ?? 0, p.checksLabel ?? 'checks')}
                           </span>
                         </>
                       )}
@@ -145,7 +148,7 @@ const spokenProof = (p: Project) => {
                     <>
                       <span class="sr-only">. </span>
                       <span class="card-cta">
-                        Case study <span class="cta-arrow" aria-hidden="true">→</span>
+                        {t.cta} <span class="cta-arrow" aria-hidden="true">→</span>
                       </span>
                     </>
                   )}
@@ -161,7 +164,7 @@ const spokenProof = (p: Project) => {
   <div class="track-ctrl" data-track-ctrl>
     <span class="track-count" data-track-count aria-hidden="true">1 / {projects.length}</span>
     <div class="dots">
-      {projects.map((p, i) => <button type="button" data-dot={i} aria-label={`Show ${p.title}`} aria-current={i === 0 ? 'true' : 'false'} />)}
+      {projects.map((p, i) => <button type="button" data-dot={i} aria-label={t.show(p.title)} aria-current={i === 0 ? 'true' : 'false'} />)}
     </div>
   </div>
 </section>

@@ -4,39 +4,92 @@
 import ThemeToggle from './ThemeToggle.astro';
 import HireMenu from './HireMenu.astro';
 import { person } from '../data/profile';
+import { pathFor, ui, type Lang } from '../i18n';
 
 interface Props {
   home?: boolean;
+  lang?: Lang;
+  // The same page in the other language, when there is one: shows the EN | DE switch (and, on
+  // English pages, a one-line suggestion for visitors whose browser prefers German).
+  alt?: string;
 }
-const { home = false } = Astro.props;
-const to = (id: string) => (home ? `#${id}` : `/#${id}`);
+const { home = false, lang = 'en', alt } = Astro.props;
+const t = ui[lang];
+const homeHref = pathFor(lang, '/');
+const to = (id: string) => (home ? `#${id}` : `${homeHref}#${id}`);
 
 const nav = [
-  { id: 'work', label: 'Work' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'skills', label: 'Skills' },
+  { id: 'work', label: t.nav.work },
+  { id: 'experience', label: t.nav.experience },
+  { id: 'skills', label: t.nav.skills },
 ];
+const other: Lang = lang === 'de' ? 'en' : 'de';
 ---
 
 <header class="top">
   <div class="scroll-progress" aria-hidden="true"></div>
   <div class="wrap top-inner">
-    <a class="brand" href={home ? '#main' : '/'} aria-label={home ? `${person.name}, back to top` : `${person.name}, home`}>
+    <a class="brand" href={home ? '#main' : homeHref} aria-label={home ? `${person.name}, ${t.nav.backToTop}` : `${person.name}, ${t.nav.home}`}>
       <img src="/favicon.svg" alt="" width="26" height="26" />
       <span>{person.name}</span>
     </a>
     <div class="top-actions">
-      <HireMenu home={home} />
-      <nav aria-label="Sections">
+      <HireMenu home={home} lang={lang} alt={alt} />
+      <nav aria-label={t.nav.sections}>
         <ul>
           {nav.map((item) => <li><a href={to(item.id)}>{item.label}</a></li>)}
-          <li><a class="nav-cta" href={to('contact')}>Contact</a></li>
+          <li><a class="nav-cta" href={to('contact')}>{t.nav.contact}</a></li>
         </ul>
       </nav>
-      <ThemeToggle />
+      {
+        alt && (
+          <a class="lang-switch" href={alt} hreflang={other} lang={other} aria-label={t.lang.switchLabel} data-lang-switch={other}>
+            {t.lang.switchShort}
+          </a>
+        )
+      }
+      <ThemeToggle lang={lang} />
     </div>
   </div>
+  {
+    alt && lang === 'en' && (
+      <div class="lang-suggest" lang="de" data-lang-suggest hidden>
+        <div class="wrap lang-suggest-inner">
+          <p>{ui.de.suggest.text}</p>
+          <a href={alt} data-lang-switch="de">{ui.de.suggest.go} →</a>
+          <button type="button" data-lang-stay>{ui.de.suggest.stay}</button>
+        </div>
+      </div>
+    )
+  }
 </header>
+
+<script>
+  // Remember an explicit language choice; on English pages, suggest German (never redirect) to
+  // visitors whose browser prefers German and who haven't chosen yet.
+  const KEY = 'lang-choice';
+  const get = () => {
+    try {
+      return localStorage.getItem(KEY);
+    } catch {
+      return null;
+    }
+  };
+  const set = (v: string) => {
+    try {
+      localStorage.setItem(KEY, v);
+    } catch {}
+  };
+  document.querySelectorAll<HTMLElement>('[data-lang-switch]').forEach((a) => a.addEventListener('click', () => set(a.dataset.langSwitch!)));
+  const bar = document.querySelector<HTMLElement>('[data-lang-suggest]');
+  if (bar && !get() && (navigator.languages?.[0] ?? navigator.language ?? '').toLowerCase().startsWith('de')) {
+    bar.hidden = false;
+    bar.querySelector('[data-lang-stay]')!.addEventListener('click', () => {
+      set('en');
+      bar.hidden = true;
+    });
+  }
+</script>
 
 <style>
   .top {
@@ -100,13 +153,66 @@ const nav = [
       background: var(--paper-2);
     }
   }
+  .lang-switch {
+    display: inline-grid;
+    place-items: center;
+    min-width: 40px;
+    min-height: 40px;
+    margin-right: 4px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--ink-2);
+    text-decoration: none;
+  }
+  @media (hover: hover) {
+    .lang-switch:hover {
+      color: var(--ink);
+      background: var(--paper-2);
+    }
+  }
+  .lang-suggest {
+    border-top: 1px solid var(--line);
+    background: var(--pass-tint);
+  }
+  .lang-suggest[hidden] {
+    display: none;
+  }
+  .lang-suggest-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 16px;
+    min-height: 44px;
+    padding-block: 6px;
+    font-size: 0.9rem;
+  }
+  .lang-suggest a {
+    font-weight: 650;
+    color: var(--ink);
+    text-underline-offset: 3px;
+  }
+  .lang-suggest button {
+    min-height: 36px;
+    margin-left: auto;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
   .top-actions :global(.hire) {
     margin-right: 8px;
   }
   /* Phones: no room for both, so "Hiring?" (which ends with every way to get in touch) takes the
      Contact pill's place and its dark style. */
   @media (max-width: 560px) {
-    .top nav {
+    .top nav,
+    .lang-switch {
       display: none;
     }
     .top-actions :global(.hire-btn) {

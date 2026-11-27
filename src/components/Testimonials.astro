@@ -2,11 +2,14 @@
 import { Image } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 import type { Testimonial } from '../data/profile';
+import { ui, type Lang } from '../i18n';
 
 interface Props {
   items: Testimonial[];
+  lang?: Lang;
 }
-const { items } = Astro.props;
+const { items, lang = 'en' } = Astro.props;
+const t = ui[lang].testimonials;
 
 const photos = import.meta.glob<{ default: ImageMetadata }>('../assets/people/*.{jpg,jpeg,png,webp}', { eager: true });
 const photo = (file?: string) => file && photos[`../assets/people/${file}`]?.default;
@@ -34,7 +37,7 @@ const parts = (t: Testimonial) => {
   items.length > 0 && (
     <section id="testimonials" class="testimonials wrap section-rule" aria-labelledby="testimonials-title">
       <div class="section-head" data-reveal>
-        <h2 id="testimonials-title">What people say</h2>
+        <h2 id="testimonials-title">{t.title}</h2>
       </div>
       <div class:list={['quotes', { single: items.length === 1, multi: items.length > 1 }]}>
         {ordered.map((t) => {
@@ -52,7 +55,7 @@ const parts = (t: Testimonial) => {
                 </span>
                 <span class="relation">{t.relation}</span>
               </div>
-              <blockquote>
+              <blockquote lang="en">
                 <p>
                   {q.before}
                   {q.mark && <mark>{q.mark}</mark>}
@@ -71,12 +74,13 @@ const parts = (t: Testimonial) => {
                   <span class="name">{t.name}</span>
                   <span class="role">
                     {t.role}, {t.company}
+                    {lang !== 'en' && ` · ${ui[lang].testimonials.quoteNote}`}
                   </span>
                 </span>
               </figcaption>
               {t.link && (
                 <a class="source" href={t.link} target="_blank" rel="noopener noreferrer">
-                  Read the original <span aria-hidden="true">↗</span>
+                  {ui[lang].testimonials.original} <span aria-hidden="true">↗</span>
                 </a>
               )}
             </figure>

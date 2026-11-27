@@ -1,6 +1,7 @@
 // "break them." in the hero headline: click it and the letters fall into a heap under the
 // buttons while the test panel reports a failing test; "Run tests" snaps them back.
 // Reduced motion: the letters jump straight to their broken and fixed positions.
+const de = document.documentElement.lang === 'de';
 
 import { animate, stagger } from 'motion';
 
@@ -66,7 +67,7 @@ if (breakable && runTests && rubble) {
     falling = Promise.all(falls);
     await falling;
     falling = null;
-    setStatus('Headline broken: 1 test failing. Run the tests to put it back.');
+    setStatus(de ? 'Überschrift kaputt: 1 Test schlägt fehl. Führen Sie die Tests aus, um sie zu reparieren.' : 'Headline broken: 1 test failing. Run the tests to put it back.');
     if (fromKeyboard(event) && root.dataset.headline === 'broken') runTests.focus();
   });
 
@@ -90,7 +91,7 @@ if (breakable && runTests && rubble) {
       void line.offsetWidth;
       line.style.animation = '';
     }
-    setStatus('All tests passed. Headline fixed.');
+    setStatus(de ? 'Alle Tests bestanden. Überschrift repariert.' : 'All tests passed. Headline fixed.');
     if (event && fromKeyboard(event)) breakable.focus();
     fixing = false;
   };

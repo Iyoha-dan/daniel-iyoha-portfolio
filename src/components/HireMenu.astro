@@ -2,13 +2,18 @@
 // "Hiring?" in the header: pick what you're hiring for and get the three pieces of proof that
 // matter for it, plus the right next step (CV, email or WhatsApp). Routes live in profile.ts.
 // Switching routes is CSS only (:has on the checked radio); the script opens/closes the panel.
-import { person, projects, hireRoutes } from '../data/profile';
+import { pathFor, profileFor, ui, type Lang } from '../i18n';
 
 interface Props {
   home?: boolean;
+  lang?: Lang;
+  // The same page in the other language (phones show it here; the header has no room).
+  alt?: string;
 }
-const { home = false } = Astro.props;
-const to = (id: string) => (home ? `#${id}` : `/#${id}`);
+const { home = false, lang = 'en', alt } = Astro.props;
+const { person, projects, hireRoutes } = profileFor(lang);
+const t = ui[lang].hire;
+const to = (id: string) => (home ? `#${id}` : `${pathFor(lang, '/')}#${id}`);
 
 // Size of this site's own test suite, from the last `npm test` run.
 type Run = { stats: { expected: number; unexpected: number; flaky?: number } };
@@ -19,10 +24,10 @@ const testCount = run ? run.stats.expected + run.stats.unexpected + (run.stats.f
 type Item = { href: string; title: string; proof: string };
 const item = (slug: string, proof?: string): Item | undefined => {
   if (slug === 'tests') {
-    return testCount ? { href: to('test-run'), title: 'The tests behind this site', proof: proof ?? `${testCount} tests run before every deploy` } : undefined;
+    return testCount ? { href: to('test-run'), title: t.testsTitle, proof: proof ?? t.testsProof(testCount) } : undefined;
   }
   if (slug === 'websites') {
-    return { href: '/websites', title: 'How I build business websites', proof: proof ?? 'What you get, how it works, getting a quote' };
+    return { href: pathFor(lang, '/websites'), title: t.websitesTitle, proof: proof ?? t.websitesProof };
   }
   const p = projects.find((x) => x.slug === slug);
   return p && { href: `/work/${p.slug}`, title: p.title, proof: proof ?? p.stat ?? p.kind };
@@ -33,14 +38,14 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
 
 <div class="hire" data-hire>
   <button class="hire-btn" type="button" aria-expanded="false" aria-controls="hire-panel" data-hire-toggle>
-    Hiring?
+    {t.button}
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
   </button>
 
-  <div class="hire-panel" id="hire-panel" role="group" aria-label="The short route" hidden data-hire-panel>
-    <p class="hire-kicker">The short route</p>
+  <div class="hire-panel" id="hire-panel" role="group" aria-label={t.kicker} hidden data-hire-panel>
+    <p class="hire-kicker">{t.kicker}</p>
     <fieldset class="hire-pick">
-      <legend>I'm hiring for</legend>
+      <legend>{t.legend}</legend>
       {
         routes.map((r, i) => (
           <label>
@@ -68,22 +73,24 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
           <div class="hire-actions">
             {r.primary === 'whatsapp' ? (
               <a class="solid" href={person.whatsappWebsite} {...external}>
-                WhatsApp me ↗
+                {t.whatsapp}
               </a>
             ) : (
               person.cv && (
                 <a class="solid" href="/cv">
-                  View CV →
+                  {t.viewCv}
                 </a>
               )
             )}
-            <a href={`mailto:${person.email}`}>Email me</a>
+            <a href={`mailto:${person.email}`}>{t.email}</a>
           </div>
         </div>
       ))
     }
 
-    <a class="hire-more" href={to('contact')}>All the ways to reach me →</a>
+    <a class="hire-more" href={to('contact')}>{t.more}</a>
+    {alt && lang === 'de' && <a class="hire-more hire-lang" href={alt} hreflang="en" lang="en" data-lang-switch="en">{t.otherLang}</a>}
+    {alt && lang === 'en' && <a class="hire-more hire-lang" href={alt} hreflang="de" lang="de" data-lang-switch="de">Diese Seite auf Deutsch →</a>}
   </div>
 </div>
 
@@ -334,6 +341,9 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
     background: var(--ink);
     border-color: var(--ink);
     color: var(--paper);
+  }
+  .hire-lang {
+    display: flex;
   }
   .hire-more {
     display: inline-flex;

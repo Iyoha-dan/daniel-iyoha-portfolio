@@ -5,35 +5,101 @@
 // When a game ends it fires "bughunt:over", which brings up the site feedback card.
 import Feedback from './Feedback.astro';
 import BugBlaster from './BugBlaster.astro';
+import type { Lang } from '../i18n';
 
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+
+// The checkout itself stays English on every page (the typo bug only works in English); the game
+// around it speaks the page's language.
 type Spot = { id: string; bug?: { title: string; why: string } };
-const bugs: Record<string, Spot['bug']> = {
-  delivery: { title: 'Delivery fee in dollars', why: 'A naira checkout charging delivery as $1,500.' },
-  total: {
-    title: 'Total ignores the quantity',
-    why: '3 × ₦12,500 + ₦1,500 delivery is ₦39,000, not ₦12,500. I logged this exact bug on Linkhut.',
+const allBugs: Record<Lang, Record<string, Spot['bug']>> = {
+  en: {
+    delivery: { title: 'Delivery fee in dollars', why: 'A naira checkout charging delivery as $1,500.' },
+    total: {
+      title: 'Total ignores the quantity',
+      why: '3 × ₦12,500 + ₦1,500 delivery is ₦39,000, not ₦12,500. I logged this exact bug on Linkhut.',
+    },
+    phone: { title: 'Phone field accepts letters', why: '"08031ab4567" is not a phone number; the field should only take digits.' },
+    pay: { title: 'Typo on the main button', why: '"Procced" on the one button every customer reads.' },
+    coupon: { title: 'Coupon button sticks out of the card', why: 'A layout bug: it overflows the right edge.' },
   },
-  phone: { title: 'Phone field accepts letters', why: '"08031ab4567" is not a phone number; the field should only take digits.' },
-  pay: { title: 'Typo on the main button', why: '"Procced" on the one button every customer reads.' },
-  coupon: { title: 'Coupon button sticks out of the card', why: 'A layout bug: it overflows the right edge.' },
+  de: {
+    delivery: { title: 'Liefergebühr in Dollar', why: 'Ein Checkout in Naira berechnet die Lieferung mit $1,500.' },
+    total: {
+      title: 'Summe ignoriert die Menge',
+      why: '3 × ₦12,500 + ₦1,500 Lieferung sind ₦39,000, nicht ₦12,500. Genau diesen Bug habe ich bei Linkhut gemeldet.',
+    },
+    phone: { title: 'Telefonfeld nimmt Buchstaben an', why: '„08031ab4567“ ist keine Telefonnummer; das Feld sollte nur Ziffern annehmen.' },
+    pay: { title: 'Tippfehler auf dem Hauptbutton', why: '„Procced“ auf dem einen Button, den jeder Kunde liest.' },
+    coupon: { title: 'Gutschein-Button ragt aus der Karte', why: 'Ein Layout-Bug: Er ragt über den rechten Rand hinaus.' },
+  },
 };
+const bugs = allBugs[lang];
 const bugCount = Object.keys(bugs).length;
+const text = {
+  en: {
+    title: 'Bug hunt',
+    lede: `This checkout has ${bugCount} bugs. You have 60 seconds. Tap anything that looks wrong; tapping things that are fine counts as a miss.`,
+    found: 'found',
+    misses: 'misses',
+    ready: 'Tap anything in the checkout to start the clock.',
+    running: 'Clock is running. Find them all.',
+    fine: 'That one works fine. Keep looking.',
+    again: 'Play again',
+    real: 'See bugs I found for real',
+    device: 'A checkout page to test',
+    best: 'Your best: {f}/{t} in {s}s',
+    bugFound: 'Bug found: {b}. {f} of {t}.',
+    missed: 'Missed: ',
+    allFound: 'All {t} in {s}s{m}. You\u2019d make a good tester.',
+    withMisses: ' with {n} misses',
+    withMiss: ' with 1 miss',
+    noMisses: ', no misses',
+    some: 'You found {f} of {t}{late}. Finding the rest is my job.',
+    late: ' before the clock ran out',
+    everyBug: 'Every bug found.',
+    timeUp: 'Time\u2019s up.',
+  },
+  de: {
+    title: 'Bug-Jagd',
+    lede: `Dieser Checkout hat ${bugCount} Bugs. Sie haben 60 Sekunden. Tippen Sie auf alles, was falsch aussieht; wer auf etwas tippt, das funktioniert, kassiert einen Fehlversuch.`,
+    found: 'gefunden',
+    misses: 'Fehlversuche',
+    ready: 'Tippen Sie auf etwas im Checkout, um die Uhr zu starten.',
+    running: 'Die Uhr läuft. Finden Sie alle.',
+    fine: 'Das funktioniert. Weitersuchen.',
+    again: 'Nochmal spielen',
+    real: 'Bugs, die ich wirklich gefunden habe (EN)',
+    device: 'Ein Checkout zum Testen',
+    best: 'Ihr Rekord: {f}/{t} in {s} s',
+    bugFound: 'Bug gefunden: {b}. {f} von {t}.',
+    missed: 'Übersehen: ',
+    allFound: 'Alle {t} in {s} s{m}. Sie wären ein guter Tester.',
+    withMisses: ' mit {n} Fehlversuchen',
+    withMiss: ' mit 1 Fehlversuch',
+    noMisses: ', ohne Fehlversuch',
+    some: 'Sie haben {f} von {t} gefunden{late}. Den Rest zu finden ist mein Job.',
+    late: ', bevor die Zeit ablief',
+    everyBug: 'Alle Bugs gefunden.',
+    timeUp: 'Zeit abgelaufen.',
+  },
+}[lang];
 ---
 
 <section id="bug-hunt" class="hunt wrap section-rule" aria-labelledby="hunt-title" data-hunt>
   <div class="hunt-intro">
-    <h2 id="hunt-title">Bug hunt</h2>
-    <p class="hunt-lede">
-      This checkout has {bugCount} bugs. You have 60 seconds. Tap anything that looks wrong; tapping things that are fine counts as
-      a miss.
-    </p>
+    <h2 id="hunt-title">{text.title}</h2>
+    <p class="hunt-lede">{text.lede}</p>
 
     <div class="scoreboard" aria-live="polite">
-      <p class="score"><span data-found>0</span>/{bugCount} <span class="score-label">found</span></p>
+      <p class="score"><span data-found>0</span>/{bugCount} <span class="score-label">{text.found}</span></p>
       <p class="clock"><span data-time>60</span>s</p>
-      <p class="misses"><span data-misses>0</span> <span class="score-label">misses</span></p>
+      <p class="misses"><span data-misses>0</span> <span class="score-label">{text.misses}</span></p>
     </div>
-    <p class="hunt-status" data-status>Tap anything in the checkout to start the clock.</p>
+    <p class="hunt-status" data-status>{text.ready}</p>
     <p class="best" data-best hidden></p>
   </div>
 
@@ -43,19 +109,19 @@ const bugCount = Object.keys(bugs).length;
     <div class="hunt-end" data-end hidden>
       <p class="end-line" data-end-line></p>
       <div class="end-actions">
-        <button type="button" class="btn btn-solid" data-again>Play again</button>
-        <a class="visit" href="/work/linkhut">See bugs I found for real <span aria-hidden="true">→</span></a>
+        <button type="button" class="btn btn-solid" data-again>{text.again}</button>
+        <a class="visit" href="/work/linkhut">{text.real} <span aria-hidden="true">→</span></a>
       </div>
     </div>
 
-    <Feedback />
+    <Feedback lang={lang} />
   </div>
 
   <div class="hunt-arcade">
-    <BugBlaster />
+    <BugBlaster lang={lang} />
   </div>
 
-  <div class="device" aria-label="A checkout page to test" role="group">
+  <div class="device" aria-label={text.device} role="group" lang="en">
     <div class="shop" data-board>
       <div class="shop-bar">
         <button type="button" class="spot" data-spot="brand"><span class="shop-brand">Kapa Store</span></button>
@@ -101,7 +167,7 @@ const bugCount = Object.keys(bugs).length;
   </div>
 </section>
 
-<script define:vars={{ bugs }}>
+<script define:vars={{ bugs, text }}>
   // Plain script: the game is small and needs no library.
   const root = document.querySelector('[data-hunt]');
   if (root) {
@@ -115,6 +181,7 @@ const bugCount = Object.keys(bugs).length;
     let timeLeft = 60;
     let timer;
 
+    const fill = (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ''));
     const loadBest = () => {
       try {
         return JSON.parse(localStorage.getItem('bug-hunt-best') || 'null');
@@ -127,7 +194,7 @@ const bugCount = Object.keys(bugs).length;
       const el = $('[data-best]');
       if (!best) return;
       el.hidden = false;
-      el.textContent = `Your best: ${best.found}/${total} in ${best.time}s`;
+      el.textContent = fill(text.best, { f: best.found, t: total, s: best.time });
     };
 
     const render = () => {
@@ -139,7 +206,7 @@ const bugCount = Object.keys(bugs).length;
     const start = () => {
       state = 'playing';
       root.classList.add('is-playing');
-      $('[data-status]').textContent = 'Clock is running. Find them all.';
+      $('[data-status]').textContent = text.running;
       timer = setInterval(() => {
         timeLeft -= 1;
         render();
@@ -170,16 +237,17 @@ const bugCount = Object.keys(bugs).length;
         const li = document.createElement('li');
         li.className = 'is-missed';
         li.innerHTML = '<strong></strong><span></span>';
-        li.querySelector('strong').textContent = `Missed: ${bugs[id].title}`;
+        li.querySelector('strong').textContent = text.missed + bugs[id].title;
         li.querySelector('span').textContent = bugs[id].why;
         $('[data-found-list]').append(li);
       }
+      const missText = misses === 0 ? text.noMisses : misses === 1 ? text.withMiss : fill(text.withMisses, { n: misses });
       const line =
         found.size === total
-          ? `All ${total} in ${time}s${misses ? ` with ${misses} ${misses === 1 ? 'miss' : 'misses'}` : ', no misses'}. You'd make a good tester.`
-          : `You found ${found.size} of ${total}${timeLeft <= 0 ? ' before the clock ran out' : ''}. Finding the rest is my job.`;
+          ? fill(text.allFound, { t: total, s: time, m: missText })
+          : fill(text.some, { f: found.size, t: total, late: timeLeft <= 0 ? text.late : '' });
       $('[data-end-line]').textContent = line;
-      $('[data-status]').textContent = found.size === total ? 'Every bug found.' : "Time's up.";
+      $('[data-status]').textContent = found.size === total ? text.everyBug : text.timeUp;
       $('[data-end]').hidden = false;
       const best = loadBest();
       if (!best || found.size > best.found || (found.size === best.found && time < best.time)) {
@@ -201,7 +269,7 @@ const bugCount = Object.keys(bugs).length;
       spots.forEach((s) => s.classList.remove('is-found', 'is-missed', 'is-wrong'));
       $('[data-found-list]').replaceChildren();
       $('[data-end]').hidden = true;
-      $('[data-status]').textContent = 'Tap anything in the checkout to start the clock.';
+      $('[data-status]').textContent = text.ready;
       render();
     };
 
@@ -215,12 +283,12 @@ const bugCount = Object.keys(bugs).length;
           found.add(id);
           spot.classList.add('is-found');
           addFound(id);
-          $('[data-status]').textContent = `Bug found: ${bugs[id].title}. ${found.size} of ${total}.`;
+          $('[data-status]').textContent = fill(text.bugFound, { b: bugs[id].title, f: found.size, t: total });
           render();
           if (found.size === total) finish();
         } else {
           misses += 1;
-          $('[data-status]').textContent = 'That one works fine. Keep looking.';
+          $('[data-status]').textContent = text.fine;
           spot.classList.remove('is-wrong');
           if (!reduced.matches) void spot.offsetWidth;
           spot.classList.add('is-wrong');

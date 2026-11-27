@@ -1,0 +1,570 @@
+---
+// For small-business owners who want a website: what they get, how it works, led by Ellanielos.
+// English at /websites, German at /de/websites. Claims stay within what the projects show (see
+// notes/project-notes.md); no prices or timelines until Daniel sets them, so pricing points to a
+// quote. The client quote stays in its original English.
+import { Image } from 'astro:assets';
+import ellanielosDesktop from '../assets/work/ellanielos-desktop.jpg';
+import ellanielosPhone from '../assets/work/ellanielos-mobile.jpg';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { profileFor, type Lang } from '../i18n';
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+const { person, projects, testimonials } = profileFor(lang);
+const alt = lang === 'de' ? '/websites' : '/de/websites';
+
+const ellanielos = projects.find((p) => p.slug === 'ellanielos')!;
+const others = projects.filter((p) => p.group === 'web' && p.slug !== 'ellanielos');
+const quote = testimonials.find((t) => t.relation === 'Client');
+const whatsapp = person.whatsappWebsite;
+const external = { target: '_blank', rel: 'noopener noreferrer' };
+
+const copy = {
+  en: {
+    title: `Websites for small businesses · ${person.name}`,
+    description: 'Websites for small businesses that load fast on any phone, connect customers to WhatsApp in one tap, and are tested before launch.',
+    label: 'For small businesses',
+    h1: 'A website your customers can actually use on their phones.',
+    lede: 'I build websites for small businesses: quick on mid-range Android phones and mobile data, connected to WhatsApp where your customers already talk to you, and tested before anyone sees them.',
+    talkCta: 'Tell me about your business ↗',
+    seeExample: 'See an example',
+    altDesktop: 'Ellanielos Concept homepage on a desktop screen',
+    altPhone: 'Ellanielos Concept homepage on a phone',
+    exampleLabel: 'Example',
+    exampleText:
+      'A monogram, embroidery and printing shop in Shomolu, Lagos. Its customers arrive from WhatsApp on their phones, so the site is built to turn a visit into an order chat.',
+    points: [
+      'Every service button opens WhatsApp with the order message already written.',
+      'Customers preview their initials or logo on a polo, cap or towel before asking for a quote.',
+      'The family can update their own details and photos, with no developer needed.',
+      'Lighthouse on mobile: 92 performance, 100 accessibility, 100 SEO.',
+    ],
+    story: 'Read the full story',
+    visit: 'Visit the site',
+    getsTitle: 'What you get',
+    gets: [
+      { title: 'Fast on any phone', text: 'Built for mid-range Android phones on mobile data, and measured on the live site.' },
+      { title: 'WhatsApp and call buttons', text: 'Customers reach you in one tap, with their message already started.' },
+      { title: 'Works on every screen', text: 'Phones, tablets and laptops, each checked before launch.' },
+      { title: 'Yours to update', text: 'Change your details, services and photos in simple files, with a short guide to follow.' },
+      { title: 'Tested before launch', text: 'I test it like the QA tester I am: links, buttons, forms, accessibility and speed.' },
+      { title: 'Ready to be found and shared', text: 'Page titles, descriptions and link previews set up for Google and for sharing on WhatsApp.' },
+    ],
+    stepsTitle: 'How it works',
+    steps: [
+      { title: 'Tell me about your business', text: 'On WhatsApp or email: what you sell, who buys it, and what you want visitors to do.' },
+      { title: 'Choose a direction', text: 'I show you design options to choose from before anything is built.' },
+      { title: 'Try a private preview', text: 'You get a link to test the site on your own phone before anyone else sees it.' },
+      { title: 'Go live', text: 'It goes up on your address, and you get a short guide for keeping it up to date.' },
+    ],
+    price: "Every business is different, so there's no price list. Tell me what you need and I'll send you a quote.",
+    legal: '',
+    saidTitle: 'What a client said',
+    quoteNote: '',
+    moreTitle: "More sites I've built",
+    talkTitle: 'Ready to talk about your website?',
+    whatsapp: 'WhatsApp me ↗',
+    email: 'Email me',
+  },
+  de: {
+    title: `Websites für kleine Unternehmen · ${person.name}`,
+    description: 'Websites für kleine Unternehmen, die auf jedem Handy schnell laden, Kunden mit einem Tipp zu WhatsApp bringen und vor dem Launch getestet werden.',
+    label: 'Für kleine Unternehmen',
+    h1: 'Eine Website, die Ihre Kunden auf dem Handy wirklich nutzen können.',
+    lede: 'Ich baue Websites für kleine Unternehmen: schnell auch auf einfachen Handys und im Mobilfunknetz, verbunden mit WhatsApp, wo Ihre Kunden ohnehin mit Ihnen schreiben, und getestet, bevor sie jemand sieht.',
+    talkCta: 'Erzählen Sie mir von Ihrem Unternehmen ↗',
+    seeExample: 'Ein Beispiel ansehen',
+    altDesktop: 'Startseite von Ellanielos Concept auf einem Desktop-Bildschirm',
+    altPhone: 'Startseite von Ellanielos Concept auf einem Handy',
+    exampleLabel: 'Beispiel',
+    exampleText:
+      'Ein Geschäft für Monogramme, Stickerei und Druck in Shomolu, Lagos. Die Kundschaft kommt über WhatsApp und auf dem Handy, deshalb ist die Website darauf gebaut, aus einem Besuch einen Bestell-Chat zu machen.',
+    points: [
+      'Jeder Leistungs-Button öffnet WhatsApp mit einer fertig formulierten Bestellnachricht.',
+      'Kunden sehen ihre Initialen oder ihr Logo als Vorschau auf Polo, Cap oder Handtuch, bevor sie ein Angebot anfragen.',
+      'Die Familie pflegt Kontaktdaten und Fotos selbst, ganz ohne Entwickler.',
+      'Lighthouse mobil: 92 Performance, 100 Barrierefreiheit, 100 SEO.',
+    ],
+    story: 'Die ganze Geschichte (EN)',
+    visit: 'Website besuchen',
+    getsTitle: 'Das bekommen Sie',
+    gets: [
+      { title: 'Schnell auf jedem Handy', text: 'Gebaut für einfache Android-Handys im Mobilfunknetz und auf der echten Website gemessen.' },
+      { title: 'WhatsApp- und Anruf-Buttons', text: 'Kunden erreichen Sie mit einem Tipp, die Nachricht ist schon angefangen.' },
+      { title: 'Funktioniert auf jedem Bildschirm', text: 'Handy, Tablet und Laptop, jedes vor dem Launch geprüft.' },
+      { title: 'Selbst aktualisierbar', text: 'Kontaktdaten, Leistungen und Fotos ändern Sie in einfachen Dateien, mit einer kurzen Anleitung.' },
+      { title: 'Vor dem Launch getestet', text: 'Ich teste wie der QA-Tester, der ich bin: Links, Buttons, Formulare, Barrierefreiheit und Tempo.' },
+      { title: 'Bereit, gefunden und geteilt zu werden', text: 'Seitentitel, Beschreibungen und Linkvorschauen für Google und zum Teilen auf WhatsApp eingerichtet.' },
+    ],
+    stepsTitle: 'So läuft es ab',
+    steps: [
+      { title: 'Erzählen Sie von Ihrem Unternehmen', text: 'Per WhatsApp oder E-Mail: was Sie verkaufen, wer es kauft und was Besucher tun sollen.' },
+      { title: 'Wählen Sie eine Richtung', text: 'Ich zeige Ihnen Designvorschläge zur Auswahl, bevor etwas gebaut wird.' },
+      { title: 'Testen Sie eine private Vorschau', text: 'Sie bekommen einen Link, um die Website auf Ihrem eigenen Handy zu testen, bevor sie jemand anders sieht.' },
+      { title: 'Live gehen', text: 'Die Website geht unter Ihrer Adresse online, und Sie bekommen eine kurze Anleitung, um sie aktuell zu halten.' },
+    ],
+    price: 'Jedes Unternehmen ist anders, deshalb gibt es keine Preisliste. Erzählen Sie mir, was Sie brauchen, und Sie bekommen ein Angebot.',
+    legal: 'Für Websites in Deutschland gehören ein Impressum und eine Datenschutzerklärung dazu: Ich baue die Seiten, den Rechtstext liefern Sie oder Ihre Beratung.',
+    saidTitle: 'Was eine Kundin sagt',
+    quoteNote: 'Original auf Englisch',
+    moreTitle: 'Weitere Websites von mir',
+    talkTitle: 'Bereit, über Ihre Website zu sprechen?',
+    whatsapp: 'Per WhatsApp schreiben ↗',
+    email: 'E-Mail schreiben',
+  },
+}[lang];
+const gets = copy.gets;
+const steps = copy.steps;
+---
+
+<Base lang={lang} title={copy.title} description={copy.description}>
+  <SiteHeader lang={lang} alt={alt} />
+
+  <main id="main">
+    <section class="intro wrap" aria-labelledby="biz-title">
+      <p class="label">{copy.label}</p>
+      <h1 id="biz-title">{copy.h1}</h1>
+      <p class="lede">{copy.lede}</p>
+      <div class="actions">
+        <a class="btn btn-solid" href={whatsapp} {...external}>{copy.talkCta}</a>
+        <a class="btn btn-ghost" href="#example">{copy.seeExample}</a>
+      </div>
+    </section>
+
+    <section id="example" class="example wrap" aria-labelledby="example-title">
+      <div class="example-visual" style={`--accent:${ellanielos.accent}`}>
+        <div class="browser">
+          <div class="browser-bar" aria-hidden="true"><span></span><span></span><span></span><p>ellanielos.com.ng</p></div>
+          <Image src={ellanielosDesktop} alt={copy.altDesktop} widths={[480, 640, 960, 1280]} sizes="(min-width: 961px) 460px, 81vw" />
+        </div>
+        <div class="phone">
+          <Image src={ellanielosPhone} alt={copy.altPhone} widths={[120, 180, 240, 360]} sizes="(min-width: 961px) 135px, 21vw" />
+        </div>
+      </div>
+      <div class="example-copy">
+        <p class="label">{copy.exampleLabel}</p>
+        <h2 id="example-title">Ellanielos Concept</h2>
+        <p>{copy.exampleText}</p>
+        <ul class="points">
+          {copy.points.map((point) => <li>{point}</li>)}
+        </ul>
+        <p class="links">
+          <a class="visit" href="/work/ellanielos">{copy.story} <span aria-hidden="true">→</span></a>
+          <a class="visit" href="https://ellanielos.com.ng" {...external}>{copy.visit} <span aria-hidden="true">↗</span></a>
+        </p>
+      </div>
+    </section>
+
+    <section class="gets wrap section-rule" aria-labelledby="gets-title">
+      <h2 id="gets-title">{copy.getsTitle}</h2>
+      <ul>
+        {
+          gets.map((g) => (
+            <li>
+              <h3>{g.title}</h3>
+              <p>{g.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="steps wrap section-rule" aria-labelledby="steps-title">
+      <h2 id="steps-title">{copy.stepsTitle}</h2>
+      <ol>
+        {
+          steps.map((s, i) => (
+            <li>
+              <span class="step-n" aria-hidden="true">{i + 1}</span>
+              <h3>{s.title}</h3>
+              <p>{s.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+      <p class="price">{copy.price}</p>
+      {copy.legal && <p class="price legal">{copy.legal}</p>}
+    </section>
+
+    {
+      quote && (
+        <section class="said wrap section-rule" aria-labelledby="said-title">
+          <h2 id="said-title" class="sr-only">{copy.saidTitle}</h2>
+          <figure>
+            <blockquote lang="en">
+              <p>{quote.quote}</p>
+            </blockquote>
+            <figcaption>
+              <strong>{quote.name}</strong>
+              <span>
+                {quote.role}, {quote.company} · {quote.relation}
+                {copy.quoteNote && ` · ${copy.quoteNote}`}
+              </span>
+            </figcaption>
+          </figure>
+        </section>
+      )
+    }
+
+    <section class="more wrap section-rule" aria-labelledby="more-title">
+      <h2 id="more-title">{copy.moreTitle}</h2>
+      <ul>
+        {
+          others.map((p) => (
+            <li>
+              <a href={`/work/${p.slug}`}>
+                <span class="more-title">{p.title}</span>
+                <span class="more-kind">{p.kind}</span>
+                {p.stat && <span class="more-stat">{p.stat}</span>}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="talk" aria-labelledby="talk-title">
+      <div class="wrap talk-inner">
+        <h2 id="talk-title">{copy.talkTitle}</h2>
+        <div class="talk-actions">
+          <a class="talk-primary" href={whatsapp} {...external}>{copy.whatsapp}</a>
+          <a href={`mailto:${person.email}`}>{copy.email}</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter lang={lang} />
+</Base>
+
+<style>
+  .intro {
+    padding-block: clamp(40px, 7vw, 104px) clamp(32px, 5vw, 64px);
+  }
+  h1 {
+    max-width: 16ch;
+    margin-top: 12px;
+    font-size: clamp(2.4rem, 1.5rem + 4vw, 4.5rem);
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: 58ch;
+    margin-top: 22px;
+    font-size: clamp(1.1rem, 1rem + 0.45vw, 1.3rem);
+    color: var(--ink-2);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 30px;
+  }
+
+  /* The example */
+  .example {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: clamp(28px, 5vw, 64px);
+    align-items: center;
+    padding-bottom: clamp(48px, 7vw, 96px);
+    scroll-margin-top: 88px;
+  }
+  .example-visual {
+    position: relative;
+    padding: clamp(20px, 4vw, 48px) clamp(48px, 8vw, 96px) clamp(36px, 5vw, 64px) clamp(16px, 3vw, 40px);
+    border-radius: 20px;
+    background: var(--accent);
+  }
+  .browser {
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--term);
+    box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.6);
+  }
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  .browser-bar span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgb(255 255 255 / 0.2);
+  }
+  .browser-bar p {
+    margin-left: 8px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--term-dim);
+  }
+  .browser img {
+    width: 100%;
+  }
+  .phone {
+    position: absolute;
+    right: clamp(12px, 3vw, 32px);
+    bottom: clamp(12px, 2.5vw, 28px);
+    width: clamp(90px, 24%, 180px);
+    padding: 5px;
+    border-radius: 22px;
+    background: var(--term);
+    box-shadow: 0 24px 48px -20px rgb(0 0 0 / 0.6);
+  }
+  .phone img {
+    aspect-ratio: 390 / 720;
+    object-fit: cover;
+    object-position: top;
+    border-radius: 17px;
+  }
+  .example-copy h2,
+  .gets h2,
+  .steps h2,
+  .more h2 {
+    font-size: clamp(1.8rem, 1.3rem + 2vw, 2.8rem);
+    font-weight: 720;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  .example-copy h2 {
+    margin-top: 8px;
+  }
+  .example-copy > p:not(.label):not(.links) {
+    margin-top: 14px;
+    color: var(--ink-2);
+  }
+  .points {
+    display: grid;
+    gap: 10px;
+    margin-top: 18px;
+    padding: 0;
+    list-style: none;
+  }
+  .points li {
+    position: relative;
+    padding-left: 28px;
+    color: var(--ink-2);
+  }
+  .points li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    top: 1px;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--pass-tint);
+    color: var(--pass);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 28px;
+  }
+
+  /* What you get, how it works */
+  .gets,
+  .steps,
+  .said,
+  .more {
+    padding-block: clamp(48px, 7vw, 88px);
+  }
+  .gets ul,
+  .steps ol {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(24px, 3vw, 40px);
+    margin-top: clamp(24px, 4vw, 40px);
+    padding: 0;
+    list-style: none;
+  }
+  .steps ol {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .gets h3,
+  .steps h3 {
+    font-size: 1.15rem;
+    font-weight: 680;
+    letter-spacing: -0.01em;
+  }
+  .gets li {
+    padding-top: 16px;
+    border-top: 2px solid var(--pass);
+  }
+  .gets p,
+  .steps p {
+    margin-top: 8px;
+    color: var(--ink-2);
+    font-size: 0.97rem;
+  }
+  .step-n {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+  .legal {
+    margin-top: 12px !important;
+    background: transparent;
+    border: 1px solid var(--line);
+  }
+  .price {
+    max-width: 60ch;
+    margin-top: clamp(28px, 4vw, 44px);
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: var(--paper-2);
+    color: var(--ink-2);
+  }
+
+  /* The client quote */
+  .said figure {
+    max-width: 880px;
+    margin: 0;
+  }
+  .said blockquote {
+    margin: 0;
+  }
+  .said blockquote p {
+    font-size: clamp(1.15rem, 1rem + 0.6vw, 1.45rem);
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    text-wrap: pretty;
+  }
+  .said blockquote p::before {
+    content: '\201C';
+    display: block;
+    height: 0.55em;
+    margin-bottom: 8px;
+    font-size: 3.4rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--pass);
+  }
+  .said figcaption {
+    display: grid;
+    margin-top: 18px;
+  }
+  .said figcaption span {
+    color: var(--ink-3);
+    font-size: 0.92rem;
+  }
+
+  /* More sites */
+  .more ul {
+    margin-top: 24px;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--line);
+  }
+  .more li {
+    border-bottom: 1px solid var(--line);
+  }
+  .more a {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 16px;
+    padding: 16px 0;
+    text-decoration: none;
+  }
+  .more-title {
+    font-size: 1.25rem;
+    font-weight: 650;
+  }
+  .more-kind {
+    grid-row: 2;
+    color: var(--ink-3);
+    font-size: 0.92rem;
+  }
+  .more-stat {
+    grid-row: span 2;
+    align-self: center;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--pass);
+  }
+
+  /* Closing call */
+  .talk {
+    background: var(--term);
+    color: var(--term-text);
+  }
+  .talk-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding-block: clamp(48px, 7vw, 88px);
+  }
+  .talk h2 {
+    max-width: 18ch;
+    font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem);
+    font-weight: 720;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+  }
+  .talk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .talk-actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 22px;
+    border: 1px solid rgb(255 255 255 / 0.22);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+  .talk-actions .talk-primary {
+    background: var(--term-pass);
+    border-color: var(--term-pass);
+    color: #0b0b0a;
+    font-weight: 500;
+  }
+
+  @media (max-width: 960px) {
+    .example {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .gets ul,
+    .steps ol {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 600px) {
+    .gets ul,
+    .steps ol {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .more a {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .more-stat {
+      grid-row: auto;
+    }
+  }
+</style>

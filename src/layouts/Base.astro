@@ -6,22 +6,27 @@ import '../styles/global.css';
 import sansFont from '@fontsource-variable/schibsted-grotesk/files/schibsted-grotesk-latin-wght-normal.woff2?url';
 import monoFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url';
 import monoMediumFont from '@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2?url';
+import { alternatesFor, ui, type Lang } from '../i18n';
 
 interface Props {
   title: string;
   description: string;
   // Private pages (the inbox) ask search engines not to list them.
   noindex?: boolean;
+  lang?: Lang;
 }
-const { title, description, noindex = false } = Astro.props;
+const { title, description, noindex = false, lang = 'en' } = Astro.props;
 // The build writes /websites.html, but Firebase serves (and 301-redirects to) /websites, so
 // canonical and og:url use the clean address.
 const cleanPath = Astro.url.pathname.replace(/\.html$/, '').replace(/(^|\/)index$/, '$1') || '/';
 const canonical = new URL(cleanPath, Astro.site);
+// Pages that exist in English and German point search engines at each other.
+const enPath = lang === 'de' ? cleanPath.replace(/^\/de(?=\/|$)/, '') || '/' : cleanPath;
+const alternates = alternatesFor(enPath);
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -30,10 +35,20 @@ const canonical = new URL(cleanPath, Astro.site);
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical} />
+    {
+      alternates && (
+        <>
+          <link rel="alternate" hreflang="en" href={new URL(alternates.en, Astro.site)} />
+          <link rel="alternate" hreflang="de" href={new URL(alternates.de, Astro.site)} />
+          <link rel="alternate" hreflang="x-default" href={new URL(alternates.en, Astro.site)} />
+        </>
+      )
+    }
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#f4f3ee" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#121210" media="(prefers-color-scheme: dark)" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content={lang === 'de' ? 'de_DE' : 'en_GB'} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -55,7 +70,7 @@ const canonical = new URL(cleanPath, Astro.site);
     </script>
   </head>
   <body>
-    <a class="skip" href="#main">Skip to content</a>
+    <a class="skip" href="#main">{ui[lang].skip}</a>
     <slot />
     <script>
       import '../scripts/motion';

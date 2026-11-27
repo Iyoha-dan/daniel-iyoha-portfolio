@@ -531,6 +531,86 @@ test.describe('private inbox', () => {
   });
 });
 
+test.describe('german pages', () => {
+  for (const [path, enPath, h1] of [
+    ['/de', '/', /Ich baue Websites/],
+    ['/de/websites', '/websites', /Eine Website, die Ihre Kunden/],
+  ] as const) {
+    test(`${path} is in German and points to its English twin`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+      await expect(page.locator('h1')).toHaveText(h1);
+      // Search engines see both versions as translations of each other.
+      await expect(page.locator('link[hreflang="en"]')).toHaveAttribute('href', new RegExp(`${enPath === '/' ? '/$' : enPath + '$'}`));
+      await expect(page.locator('link[hreflang="de"]')).toHaveAttribute('href', new RegExp(`${path}$`));
+      // The switch leads to the same page in English.
+      await expect(page.getByRole('link', { name: 'This page in English' })).toHaveAttribute('href', enPath);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+
+  test('the German homepage keeps visitors on German pages where they exist', async ({ page }) => {
+    await page.goto('/de');
+    await expect(page.getByRole('navigation', { name: 'Bereiche' }).getByRole('link', { name: 'Arbeiten' })).toHaveAttribute('href', '#work');
+    await expect(page.locator('#contact').getByRole('link', { name: /So arbeite ich/ })).toHaveAttribute('href', '/de/websites');
+    await page.getByRole('button', { name: 'Sie suchen?' }).click();
+    await page.getByRole('radio', { name: 'Eine Firmen-Website' }).check();
+    await expect(page.locator('[data-route="business"] li a').first()).toHaveAttribute('href', '/de/websites');
+    // Case studies are English, and say so.
+    await expect(page.locator('[data-work-list] .card-cta').first()).toContainText('(EN)');
+  });
+
+  test('the German headline fits its column at every width', async ({ page }) => {
+    for (const width of [1440, 1180, 1000, 390, 360]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/de');
+      const word = (await page.getByRole('button', { name: 'kaputtzumachen.' }).boundingBox())!;
+      const copy = (await page.locator('.hero-copy').boundingBox())!;
+      expect(word.x + word.width, `at ${width}px`).toBeLessThanOrEqual(copy.x + copy.width + 1);
+    }
+  });
+
+  test('the German headline breaks and the tests put it back', async ({ page }) => {
+    await page.goto('/de');
+    await page.getByRole('button', { name: 'kaputtzumachen.' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-headline', 'broken');
+    await page.getByRole('button', { name: 'Tests ausführen' }).click();
+    await expect(page.locator('html')).not.toHaveAttribute('data-headline', 'broken');
+  });
+
+  test('German pages fit a 360px phone', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    for (const path of ['/de', '/de/websites']) {
+      await page.goto(path);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, path).toBeLessThanOrEqual(0);
+      const header = (await page.locator('.top-inner').boundingBox())!;
+      expect(header.width, path).toBeLessThanOrEqual(360);
+    }
+  });
+
+  test('English pages offer German, but only suggest it to German browsers', async ({ page }) => {
+    await expect(page.getByRole('link', { name: 'Diese Seite auf Deutsch' }).first()).toHaveAttribute('href', '/de');
+    await expect(page.locator('[data-lang-suggest]')).toBeHidden();
+  });
+});
+
+test.describe('german browser', () => {
+  test.use({ locale: 'de-DE' });
+
+  test('gets a one-line suggestion, never a redirect, and the choice is remembered', async ({ page }) => {
+    await expect(page).toHaveURL((url) => url.pathname === '/');
+    const bar = page.locator('[data-lang-suggest]');
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole('link', { name: /Auf Deutsch lesen/ })).toHaveAttribute('href', '/de');
+    await bar.getByRole('button', { name: 'Auf Englisch bleiben' }).click();
+    await expect(bar).toBeHidden();
+    await page.reload();
+    await expect(page.locator('[data-lang-suggest]')).toBeHidden();
+  });
+});
+
 test.describe('bug blaster', () => {
   const game = (page) => page.locator('[data-blaster-dialog]');
   const play = (page) => page.locator('[data-blaster]').getByRole('button', { name: 'Play' });

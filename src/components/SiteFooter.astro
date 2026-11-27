@@ -1,13 +1,19 @@
 ---
 import { person } from '../data/profile';
+import { ui, type Lang } from '../i18n';
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+const t = ui[lang].footer;
 ---
 
 <footer class="foot">
   <div class="wrap foot-inner">
     <p>© {new Date().getFullYear()} {person.name}</p>
     <p>
-      Built with Astro. Tested with Playwright:
-      <a href={`${person.repo}/blob/main/tests/site.spec.ts`} target="_blank" rel="noopener noreferrer">read the tests ↗</a>
+      {t.built}
+      <a href={`${person.repo}/blob/main/tests/site.spec.ts`} target="_blank" rel="noopener noreferrer">{t.readTests}</a>
     </p>
   </div>
 </footer>

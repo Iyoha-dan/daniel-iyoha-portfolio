@@ -3,19 +3,54 @@
 // "bughunt:over"). Answers go straight to Firestore over its REST API (no SDK): collection
 // "feedback" in the daniel-iyoha project, write-only under firestore.rules. Whatever the visitor
 // does (sends, skips or says not now) is remembered, so the card never asks twice.
+import type { Lang } from '../i18n';
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
 const scale = [1, 2, 3, 4, 5];
+const t = {
+  en: {
+    kicker: 'Quick question',
+    of: 'of',
+    notNow: 'Not now',
+    q1: 'How easy was it to find what you needed on this site?',
+    hint1: '1 is frustrating, 5 is effortless.',
+    next: 'Next',
+    q2: 'Anything broken or confusing?',
+    hint2: 'Report it like a bug: what you did and what happened. Optional.',
+    skip: 'Skip',
+    send: 'Send',
+    done: 'Logged. Thank you for testing my site.',
+    error: "That didn't send. Check your connection and try again.",
+  },
+  de: {
+    kicker: 'Kurze Frage',
+    of: 'von',
+    notNow: 'Jetzt nicht',
+    q1: 'Wie leicht haben Sie auf dieser Website gefunden, was Sie gesucht haben?',
+    hint1: '1 ist frustrierend, 5 ist mühelos.',
+    next: 'Weiter',
+    q2: 'Ist etwas kaputt oder unklar?',
+    hint2: 'Melden Sie es wie einen Bug: was Sie getan haben und was passiert ist. Optional.',
+    skip: 'Überspringen',
+    send: 'Senden',
+    done: 'Gespeichert. Danke, dass Sie meine Website getestet haben.',
+    error: 'Das wurde nicht gesendet. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
+  },
+}[lang];
 ---
 
 <div class="fb" data-feedback hidden>
   <div class="fb-head">
-    <p class="fb-kicker">Quick question · <span data-fb-step>1</span> of 2</p>
-    <button type="button" class="fb-close" data-fb-dismiss aria-label="Not now">×</button>
+    <p class="fb-kicker">{t.kicker} · <span data-fb-step>1</span> {t.of} 2</p>
+    <button type="button" class="fb-close" data-fb-dismiss aria-label={t.notNow}>×</button>
   </div>
 
   <form data-fb-form novalidate>
     <fieldset class="fb-step" data-fb-panel="1">
-      <legend class="fb-q">How easy was it to find what you needed on this site?</legend>
-      <p class="fb-hint" id="fb-scale-hint">1 is frustrating, 5 is effortless.</p>
+      <legend class="fb-q">{t.q1}</legend>
+      <p class="fb-hint" id="fb-scale-hint">{t.hint1}</p>
       <div class="fb-scale" aria-describedby="fb-scale-hint">
         {
           scale.map((n) => (
@@ -27,24 +62,24 @@ const scale = [1, 2, 3, 4, 5];
         }
       </div>
       <div class="fb-actions">
-        <button type="button" class="fb-quiet" data-fb-dismiss>Not now</button>
-        <button type="button" class="fb-go" data-fb-next disabled>Next</button>
+        <button type="button" class="fb-quiet" data-fb-dismiss>{t.notNow}</button>
+        <button type="button" class="fb-go" data-fb-next disabled>{t.next}</button>
       </div>
     </fieldset>
 
     <div class="fb-step" data-fb-panel="2" hidden>
-      <label class="fb-q" for="fb-note">Anything broken or confusing?</label>
-      <p class="fb-hint">Report it like a bug: what you did and what happened. Optional.</p>
+      <label class="fb-q" for="fb-note">{t.q2}</label>
+      <p class="fb-hint">{t.hint2}</p>
       <textarea id="fb-note" name="note" rows="3" maxlength="1000"></textarea>
       <div class="fb-actions">
-        <button type="button" class="fb-quiet" data-fb-skip>Skip</button>
-        <button type="submit" class="fb-go" data-fb-send>Send</button>
+        <button type="button" class="fb-quiet" data-fb-skip>{t.skip}</button>
+        <button type="submit" class="fb-go" data-fb-send>{t.send}</button>
       </div>
     </div>
   </form>
 
-  <p class="fb-done" data-fb-done hidden tabindex="-1">Logged. Thank you for testing my site.</p>
-  <p class="fb-error" data-fb-error role="alert" hidden>That didn't send. Check your connection and try again.</p>
+  <p class="fb-done" data-fb-done hidden tabindex="-1">{t.done}</p>
+  <p class="fb-error" data-fb-error role="alert" hidden>{t.error}</p>
 </div>
 
 <script>
